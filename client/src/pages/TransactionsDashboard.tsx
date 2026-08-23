@@ -54,6 +54,7 @@ export const TransactionsDashboard: React.FC = () => {
   };
 
   const typeMeta = (type: TransactionType) => TRANSACTION_TYPES.find(t => t.type === type);
+  const activeTypeMeta = typeFilter !== 'ALL' ? typeMeta(typeFilter) : null;
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">
@@ -67,9 +68,9 @@ export const TransactionsDashboard: React.FC = () => {
         {activeTab === 'ledger' && (
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm transition self-start"
+            className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm transition self-start whitespace-nowrap"
           >
-            + New Transaction
+            + New {activeTypeMeta ? activeTypeMeta.label : 'Transaction'}
           </button>
         )}
       </div>
@@ -212,9 +213,11 @@ export const TransactionsDashboard: React.FC = () => {
       )}
 
       <NewTransactionModal
+        key={typeFilter}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSave}
+        defaultType={typeFilter !== 'ALL' ? typeFilter : undefined}
       />
     </div>
   );

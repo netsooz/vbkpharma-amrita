@@ -20,8 +20,11 @@ else:
 
 is_sqlite = DATABASE_URL.startswith("sqlite")
 
-print("RAW DATABASE_URL:", repr(raw_db_url))
-print("FINAL DATABASE_URL:", repr(DATABASE_URL))
+print("=== DATABASE DEBUG ===")
+print("raw_db_url =", repr(raw_db_url))
+print("DATABASE_URL =", repr(DATABASE_URL))
+print("is_sqlite =", is_sqlite)
+print("======================")
 
 engine = create_engine(
     DATABASE_URL,

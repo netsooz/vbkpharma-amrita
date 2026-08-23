@@ -500,6 +500,152 @@ def seed_demo_content(db: Session) -> dict:
         status="Approved",
     )
     db.add_all([inventory_lot_1, inventory_lot_2])
+    db.flush()
+
+    # Units of Measure Master
+    uom_records = [
+        ("KG", "Kilogram", "Weight", None, 1.0),
+        ("G", "Gram", "Weight", "KG", 0.001),
+        ("MG", "Milligram", "Weight", "KG", 0.000001),
+        ("L", "Litre", "Volume", None, 1.0),
+        ("ML", "Millilitre", "Volume", "L", 0.001),
+        ("EACH", "Each", "Count", None, 1.0),
+        ("CASE", "Case (24 units)", "Count", "EACH", 24.0),
+    ]
+    for code, name, category, base, factor in uom_records:
+        db.add(models.UnitOfMeasure(
+            uom_code=code,
+            uom_name=name,
+            uom_category=category,
+            base_uom_code=base,
+            conversion_factor=factor,
+            status="Active",
+        ))
+
+    # Customer Master
+    customer1 = models.Customer(
+        customer_code="CUST-001",
+        customer_name="MedPlus Pharma Distributors",
+        customer_type="Distributor",
+        gstin="29AAAPL1234C1ZV",
+        contact_person="Anita Rao",
+        phone="+91-9876543210",
+        email="orders@medplus-example.com",
+        address="Hyderabad, Telangana, India",
+        credit_limit=500000.0,
+        status="Active",
+    )
+    customer2 = models.Customer(
+        customer_code="CUST-002",
+        customer_name="Apollo Health City Pharmacy",
+        customer_type="Institutional",
+        gstin="36AAAPL5678D1ZQ",
+        contact_person="Ravi Kumar",
+        phone="+91-9876500000",
+        email="procurement@apollo-example.com",
+        address="Chennai, Tamil Nadu, India",
+        credit_limit=1000000.0,
+        status="Active",
+    )
+    db.add_all([customer1, customer2])
+
+    # Tax / HSN Code Master
+    db.add_all([
+        models.TaxCode(
+            hsn_code="30049099",
+            description="Medicaments (Tablets) - Other",
+            tax_percentage=12.0,
+            tax_type="GST",
+            status="Active",
+        ),
+        models.TaxCode(
+            hsn_code="29420090",
+            description="Active Pharmaceutical Ingredients - Other Organic Compounds",
+            tax_percentage=18.0,
+            tax_type="GST",
+            status="Active",
+        ),
+    ])
+
+    # Specification Master (QC test parameters for the primary API)
+    specification = models.SpecificationMaster(
+        spec_code="SPEC-API-PCM-01",
+        material_code=material1.material_code,
+        material_name=material1.material_name,
+        version="v1.0",
+        status="Approved",
+        approved_by="QC Manager",
+        approved_on=datetime.utcnow(),
+    )
+    db.add(specification)
+    db.flush()
+    db.add_all([
+        models.SpecificationParameter(
+            specification_id=specification.id,
+            parameter_name="Assay (HPLC)",
+            test_method="USP <621>",
+            min_limit="98.0",
+            max_limit="102.0",
+            uom="% w/w",
+            is_critical=True,
+        ),
+        models.SpecificationParameter(
+            specification_id=specification.id,
+            parameter_name="Loss on Drying",
+            test_method="USP <731>",
+            min_limit="0.0",
+            max_limit="0.5",
+            uom="% w/w",
+            is_critical=False,
+        ),
+        models.SpecificationParameter(
+            specification_id=specification.id,
+            parameter_name="Heavy Metals",
+            test_method="USP <231>",
+            min_limit="0",
+            max_limit="20",
+            uom="ppm",
+            is_critical=True,
+        ),
+    ])
+
+    # Sample Stock Transactions covering the standard pharma movement types
+    transaction_samples = [
+        ("GOODS_INWARD", "GRN-0001", material1.material_code, material1.material_name, inventory_lot_1.lot_number,
+         120.0, "kg", None, "WH-01", supplier1.supplier_name, "PO-2026-0456", None, "Warehouse Supervisor"),
+        ("GOODS_RETURN_SUPPLIER", "GRS-0001", material2.material_code, material2.material_name, inventory_lot_2.lot_number,
+         5.0, "kg", "WH-01", None, supplier2.supplier_name, "DEBIT-NOTE-0012", "Damaged packaging on receipt", "QA Officer"),
+        ("MATERIAL_ISSUE", "MIS-0001", material1.material_code, material1.material_name, inventory_lot_1.lot_number,
+         10.0, "kg", "WH-01", "Granulation Suite A", "Production", "BMR-TAB-2026-004", None, "Production Supervisor"),
+        ("MATERIAL_RETURN", "MRT-0001", material1.material_code, material1.material_name, inventory_lot_1.lot_number,
+         1.5, "kg", "Granulation Suite A", "WH-01", "Production", "BMR-TAB-2026-004", "Excess dispensed quantity", "Production Supervisor"),
+        ("STOCK_TRANSFER", "STR-0001", material2.material_code, material2.material_name, inventory_lot_2.lot_number,
+         20.0, "kg", "WH-01", "WH-02", None, None, "Warehouse consolidation", "Warehouse Supervisor"),
+        ("STOCK_ADJUSTMENT", "ADJ-0001", material2.material_code, material2.material_name, inventory_lot_2.lot_number,
+         -0.8, "kg", "WH-01", "WH-01", None, "CYCLE-COUNT-0007", "Physical count variance", "Inventory Controller"),
+        ("MATERIAL_REJECTION", "REJ-0001", material1.material_code, material1.material_name, inventory_lot_1.lot_number,
+         2.0, "kg", "WH-01", "Quarantine Zone", None, "QC-DEV-0031", "QC rejected due to OOS assay result", "QA Officer"),
+        ("SAMPLE_WITHDRAWAL", "SPL-0001", material1.material_code, material1.material_name, inventory_lot_1.lot_number,
+         0.05, "kg", "WH-01", "QC Laboratory", None, "STAB-STUDY-2026-01", "Stability study sample pull", "QC Analyst"),
+    ]
+    for (txn_type, code, mcode, mname, lot, qty, uom, from_loc, to_loc, party, ref, reason, performer) in transaction_samples:
+        db.add(models.StockTransaction(
+            transaction_code=code,
+            transaction_type=txn_type,
+            material_code=mcode,
+            material_name=mname,
+            lot_number=lot,
+            quantity=qty,
+            uom=uom,
+            from_location=from_loc,
+            to_location=to_loc,
+            related_party=party,
+            reference_doc=ref,
+            reason=reason,
+            performed_by=performer,
+            signature_meaning=f"{txn_type.replace('_', ' ').title()} Authorization",
+            status="Completed",
+        ))
 
     db.commit()
     return {"message": "Master data seeded successfully", "seeded": True}
@@ -639,6 +785,71 @@ class EquipmentCreate(BaseModel):
     last_line_clearance_batch: Optional[str] = None
 
 
+class UnitOfMeasureCreate(BaseModel):
+    uom_code: str
+    uom_name: str
+    uom_category: str = "Weight"
+    base_uom_code: Optional[str] = None
+    conversion_factor: float = 1.0
+    status: str = "Active"
+
+
+class SpecificationParameterCreate(BaseModel):
+    parameter_name: str
+    test_method: Optional[str] = None
+    min_limit: Optional[str] = None
+    max_limit: Optional[str] = None
+    uom: Optional[str] = None
+    is_critical: bool = False
+
+
+class SpecificationCreate(BaseModel):
+    spec_code: str
+    material_code: str
+    material_name: str
+    version: str = "v1.0"
+    status: str = "Approved"
+    approved_by: Optional[str] = None
+    parameters: List[SpecificationParameterCreate] = []
+
+
+class CustomerCreate(BaseModel):
+    customer_code: str
+    customer_name: str
+    customer_type: str = "Distributor"
+    gstin: Optional[str] = None
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    credit_limit: float = 0.0
+    status: str = "Active"
+
+
+class TaxCodeCreate(BaseModel):
+    hsn_code: str
+    description: str
+    tax_percentage: float = 0.0
+    tax_type: str = "GST"
+    status: str = "Active"
+
+
+class StockTransactionCreate(BaseModel):
+    transaction_type: str
+    material_code: str
+    material_name: str
+    lot_number: Optional[str] = None
+    quantity: float
+    uom: str = "kg"
+    from_location: Optional[str] = None
+    to_location: Optional[str] = None
+    related_party: Optional[str] = None
+    reference_doc: Optional[str] = None
+    reason: Optional[str] = None
+    performed_by: str
+    signature_meaning: Optional[str] = None
+
+
 @app.get("/")
 def root():
     return {"status": "ok", "service": "amrita-pharma-api", "docs": "/docs"}
@@ -752,6 +963,15 @@ def get_master_data(db: Session = Depends(get_db)):
     locations = db.query(models.StorageLocation).all()
     formulations = db.query(models.Formulation).options(selectinload(models.Formulation.ingredients)).all()
     equipment = db.query(models.EquipmentMaster).all()
+    uom = db.query(models.UnitOfMeasure).order_by(models.UnitOfMeasure.uom_code.asc()).all()
+    specifications = (
+        db.query(models.SpecificationMaster)
+        .options(selectinload(models.SpecificationMaster.parameters))
+        .order_by(models.SpecificationMaster.spec_code.asc())
+        .all()
+    )
+    customers = db.query(models.Customer).order_by(models.Customer.customer_name.asc()).all()
+    tax_codes = db.query(models.TaxCode).order_by(models.TaxCode.hsn_code.asc()).all()
     return {
         "materials": materials,
         "suppliers": suppliers,
@@ -759,6 +979,10 @@ def get_master_data(db: Session = Depends(get_db)):
         "locations": locations,
         "formulations": formulations,
         "equipment": equipment,
+        "uom": uom,
+        "specifications": specifications,
+        "customers": customers,
+        "tax_codes": tax_codes,
     }
 
 
@@ -923,6 +1147,212 @@ def create_equipment(item: EquipmentCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_item)
     return db_item
+
+
+@app.get("/api/uom")
+def list_uom(db: Session = Depends(get_db)):
+    return db.query(models.UnitOfMeasure).order_by(models.UnitOfMeasure.uom_code.asc()).all()
+
+
+@app.post("/api/uom")
+def create_uom(item: UnitOfMeasureCreate, db: Session = Depends(get_db)):
+    existing = db.query(models.UnitOfMeasure).filter(models.UnitOfMeasure.uom_code == item.uom_code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="UOM code already exists")
+    db_item = models.UnitOfMeasure(**item.dict())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+@app.get("/api/specifications")
+def list_specifications(db: Session = Depends(get_db)):
+    return (
+        db.query(models.SpecificationMaster)
+        .options(selectinload(models.SpecificationMaster.parameters))
+        .order_by(models.SpecificationMaster.spec_code.asc())
+        .all()
+    )
+
+
+@app.post("/api/specifications")
+def create_specification(item: SpecificationCreate, db: Session = Depends(get_db)):
+    existing = db.query(models.SpecificationMaster).filter(models.SpecificationMaster.spec_code == item.spec_code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Specification code already exists")
+
+    spec = models.SpecificationMaster(
+        spec_code=item.spec_code,
+        material_code=item.material_code,
+        material_name=item.material_name,
+        version=item.version,
+        status=item.status,
+        approved_by=item.approved_by,
+    )
+    db.add(spec)
+    db.flush()
+
+    for param in item.parameters:
+        db.add(models.SpecificationParameter(
+            specification_id=spec.id,
+            parameter_name=param.parameter_name,
+            test_method=param.test_method,
+            min_limit=param.min_limit,
+            max_limit=param.max_limit,
+            uom=param.uom,
+            is_critical=param.is_critical,
+        ))
+
+    db.commit()
+    db.refresh(spec)
+    return spec
+
+
+@app.get("/api/customers")
+def list_customers(db: Session = Depends(get_db)):
+    return db.query(models.Customer).order_by(models.Customer.customer_name.asc()).all()
+
+
+@app.post("/api/customers")
+def create_customer(item: CustomerCreate, db: Session = Depends(get_db)):
+    existing = db.query(models.Customer).filter(models.Customer.customer_code == item.customer_code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Customer code already exists")
+    db_item = models.Customer(**item.dict())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+@app.get("/api/tax-codes")
+def list_tax_codes(db: Session = Depends(get_db)):
+    return db.query(models.TaxCode).order_by(models.TaxCode.hsn_code.asc()).all()
+
+
+@app.post("/api/tax-codes")
+def create_tax_code(item: TaxCodeCreate, db: Session = Depends(get_db)):
+    existing = db.query(models.TaxCode).filter(models.TaxCode.hsn_code == item.hsn_code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="HSN/Tax code already exists")
+    db_item = models.TaxCode(**item.dict())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+VALID_TRANSACTION_TYPES = {
+    "GOODS_INWARD",
+    "GOODS_RETURN_SUPPLIER",
+    "MATERIAL_ISSUE",
+    "MATERIAL_RETURN",
+    "STOCK_TRANSFER",
+    "STOCK_ADJUSTMENT",
+    "MATERIAL_REJECTION",
+    "SAMPLE_WITHDRAWAL",
+}
+
+TRANSACTION_CODE_PREFIXES = {
+    "GOODS_INWARD": "GRN",
+    "GOODS_RETURN_SUPPLIER": "GRS",
+    "MATERIAL_ISSUE": "MIS",
+    "MATERIAL_RETURN": "MRT",
+    "STOCK_TRANSFER": "STR",
+    "STOCK_ADJUSTMENT": "ADJ",
+    "MATERIAL_REJECTION": "REJ",
+    "SAMPLE_WITHDRAWAL": "SPL",
+}
+
+# Transaction types that consume/reduce a lot's on-hand quantity
+_QUANTITY_REDUCING_TYPES = {"MATERIAL_ISSUE", "GOODS_RETURN_SUPPLIER", "MATERIAL_REJECTION", "SAMPLE_WITHDRAWAL"}
+
+
+@app.get("/api/transactions")
+def list_transactions(transaction_type: Optional[str] = Query(None), db: Session = Depends(get_db)):
+    query = db.query(models.StockTransaction)
+    if transaction_type:
+        query = query.filter(models.StockTransaction.transaction_type == transaction_type.upper())
+    return query.order_by(models.StockTransaction.transaction_date.desc()).all()
+
+
+@app.post("/api/transactions")
+def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_db)):
+    txn_type = item.transaction_type.upper()
+    if txn_type not in VALID_TRANSACTION_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported transaction type: {item.transaction_type}")
+    if item.quantity == 0:
+        raise HTTPException(status_code=400, detail="Quantity must be non-zero")
+
+    prefix = TRANSACTION_CODE_PREFIXES[txn_type]
+    existing_count = db.query(models.StockTransaction).filter(models.StockTransaction.transaction_type == txn_type).count()
+    transaction_code = f"{prefix}-{existing_count + 1:04d}"
+
+    lot = None
+    if item.lot_number:
+        lot = db.query(models.InventoryLot).filter(models.InventoryLot.lot_number == item.lot_number).first()
+        if not lot:
+            raise HTTPException(status_code=404, detail=f"Lot {item.lot_number} not found")
+
+    if lot:
+        if txn_type in _QUANTITY_REDUCING_TYPES:
+            if lot.quantity < item.quantity:
+                raise HTTPException(status_code=400, detail="Insufficient lot quantity for this transaction")
+            lot.quantity -= item.quantity
+            if txn_type == "MATERIAL_REJECTION":
+                lot.status = "Rejected"
+        elif txn_type in ("MATERIAL_RETURN", "GOODS_INWARD"):
+            lot.quantity += item.quantity
+        elif txn_type == "STOCK_ADJUSTMENT":
+            new_qty = lot.quantity + item.quantity
+            if new_qty < 0:
+                raise HTTPException(status_code=400, detail="Adjustment would result in negative stock")
+            lot.quantity = new_qty
+        elif txn_type == "STOCK_TRANSFER" and item.to_location:
+            lot.storage_location = item.to_location
+
+    signature_meaning = item.signature_meaning or f"{txn_type.replace('_', ' ').title()} Authorization"
+
+    transaction = models.StockTransaction(
+        transaction_code=transaction_code,
+        transaction_type=txn_type,
+        material_code=item.material_code,
+        material_name=item.material_name,
+        lot_number=item.lot_number,
+        quantity=item.quantity,
+        uom=item.uom,
+        from_location=item.from_location,
+        to_location=item.to_location,
+        related_party=item.related_party,
+        reference_doc=item.reference_doc,
+        reason=item.reason,
+        performed_by=item.performed_by,
+        signature_meaning=signature_meaning,
+        status="Completed",
+    )
+    db.add(transaction)
+
+    audit = models.AuditLog(
+        entity_name="StockTransaction",
+        entity_id=transaction_code,
+        action=txn_type,
+        performed_by=item.performed_by,
+        signature_meaning=signature_meaning,
+        details_json={
+            "material_code": item.material_code,
+            "quantity": item.quantity,
+            "uom": item.uom,
+            "lot_number": item.lot_number,
+            "from_location": item.from_location,
+            "to_location": item.to_location,
+        },
+    )
+    db.add(audit)
+
+    db.commit()
+    db.refresh(transaction)
+    return transaction
 
 
 @app.get("/api/master-data/seed")

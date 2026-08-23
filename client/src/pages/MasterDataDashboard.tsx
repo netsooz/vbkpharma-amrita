@@ -52,7 +52,7 @@ const mapEquipment = (eq: any): EquipmentItem => ({
   lastLineClearanceBatch: eq.last_line_clearance_batch || '',
 });
 
-type MasterDataTab = 'manufacturing-bom' | 'packaging-bom' | 'materials' | 'suppliers' | 'manufacturers' | 'locations' | 'equipment';
+type MasterDataTab = 'manufacturing-bom' | 'packaging-bom' | 'materials' | 'suppliers' | 'manufacturers' | 'locations' | 'equipment' | 'uom' | 'specifications' | 'customers' | 'tax-codes';
 
 export const MasterDataDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MasterDataTab>('manufacturing-bom');
@@ -357,6 +357,10 @@ export const MasterDataDashboard: React.FC = () => {
             { key: 'manufacturers', label: '🏷️ Manufacturer Master' },
             { key: 'locations', label: '📍 Storage Locations' },
             { key: 'equipment', label: '🏭 Equipment Master & Calibration' },
+            { key: 'uom', label: '📏 UOM Master' },
+            { key: 'specifications', label: '📋 Specification Master' },
+            { key: 'customers', label: '🧑\u200d💼 Customer Master' },
+            { key: 'tax-codes', label: '🧾 Tax / HSN Master' },
           ] as { key: MasterDataTab; label: string }[]).map(tab => (
             <button
               key={tab.key}
@@ -681,6 +685,205 @@ export const MasterDataDashboard: React.FC = () => {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'uom' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h2 className="text-sm font-bold text-slate-900">Unit of Measure (UOM) Master</h2>
+            <p className="text-xs text-slate-500">Canonical units and conversion factors used across inventory, formulations and transactions.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-100 uppercase font-semibold text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th className="p-3">UOM Code</th>
+                  <th className="p-3">Name</th>
+                  <th className="p-3">Category</th>
+                  <th className="p-3">Base UOM</th>
+                  <th className="p-3 text-right">Conversion Factor</th>
+                  <th className="p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(masterData?.uom || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-slate-400">
+                      No units of measure found. Click "+ Seed Pharma Master Data" on a BOM tab to load examples.
+                    </td>
+                  </tr>
+                ) : (
+                  (masterData?.uom || []).map(u => (
+                    <tr key={u.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono font-bold text-blue-700">{u.uom_code}</td>
+                      <td className="p-3 font-semibold text-slate-900">{u.uom_name}</td>
+                      <td className="p-3">{u.uom_category}</td>
+                      <td className="p-3 font-mono">{u.base_uom_code || '—'}</td>
+                      <td className="p-3 text-right font-mono">{u.conversion_factor}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                          ● {u.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'specifications' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h2 className="text-sm font-bold text-slate-900">Specification Master</h2>
+            <p className="text-xs text-slate-500">QC test parameters, methods and acceptance limits per material.</p>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {(masterData?.specifications || []).length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs">
+                No specifications found. Click "+ Seed Pharma Master Data" on a BOM tab to load examples.
+              </div>
+            ) : (
+              (masterData?.specifications || []).map(spec => (
+                <div key={spec.id} className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <span className="font-mono text-xs font-bold text-blue-700">{spec.spec_code}</span>
+                      <span className="ml-2 text-sm font-semibold text-slate-900">{spec.material_name}</span>
+                      <span className="ml-2 text-xs text-slate-400 font-mono">({spec.material_code})</span>
+                    </div>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                      {spec.status} · {spec.version}
+                    </span>
+                  </div>
+                  <table className="w-full text-left text-xs text-slate-600 border border-slate-200 rounded-lg overflow-hidden">
+                    <thead className="bg-slate-100 uppercase font-semibold text-slate-700">
+                      <tr>
+                        <th className="p-2.5">Parameter</th>
+                        <th className="p-2.5">Test Method</th>
+                        <th className="p-2.5 text-right">Min</th>
+                        <th className="p-2.5 text-right">Max</th>
+                        <th className="p-2.5">UOM</th>
+                        <th className="p-2.5">Critical</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {spec.parameters.map(param => (
+                        <tr key={param.id}>
+                          <td className="p-2.5 font-semibold text-slate-900">{param.parameter_name}</td>
+                          <td className="p-2.5">{param.test_method || '—'}</td>
+                          <td className="p-2.5 text-right font-mono">{param.min_limit ?? '—'}</td>
+                          <td className="p-2.5 text-right font-mono">{param.max_limit ?? '—'}</td>
+                          <td className="p-2.5">{param.uom || '—'}</td>
+                          <td className="p-2.5">{param.is_critical ? 'Yes' : 'No'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'customers' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h2 className="text-sm font-bold text-slate-900">Customer Master</h2>
+            <p className="text-xs text-slate-500">Distributors, institutional buyers and pharmacies purchasing finished goods.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-100 uppercase font-semibold text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th className="p-3">Customer Code</th>
+                  <th className="p-3">Customer Name</th>
+                  <th className="p-3">Type</th>
+                  <th className="p-3">GSTIN</th>
+                  <th className="p-3">Contact</th>
+                  <th className="p-3 text-right">Credit Limit</th>
+                  <th className="p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(masterData?.customers || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-slate-400">
+                      No customers found. Click "+ Seed Pharma Master Data" on a BOM tab to load examples.
+                    </td>
+                  </tr>
+                ) : (
+                  (masterData?.customers || []).map(c => (
+                    <tr key={c.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono font-bold text-blue-700">{c.customer_code}</td>
+                      <td className="p-3 font-semibold text-slate-900">{c.customer_name}</td>
+                      <td className="p-3">{c.customer_type}</td>
+                      <td className="p-3 font-mono">{c.gstin || '—'}</td>
+                      <td className="p-3 text-xs">
+                        <div>{c.contact_person || '—'}</div>
+                        <div className="text-slate-400">{c.phone || c.email || ''}</div>
+                      </td>
+                      <td className="p-3 text-right font-mono">{c.credit_limit.toLocaleString()}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                          ● {c.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'tax-codes' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h2 className="text-sm font-bold text-slate-900">Tax / HSN Code Master</h2>
+            <p className="text-xs text-slate-500">HSN classification and applicable tax rates for materials and finished goods.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-100 uppercase font-semibold text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th className="p-3">HSN Code</th>
+                  <th className="p-3">Description</th>
+                  <th className="p-3">Tax Type</th>
+                  <th className="p-3 text-right">Tax %</th>
+                  <th className="p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(masterData?.tax_codes || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-8 text-slate-400">
+                      No tax/HSN codes found. Click "+ Seed Pharma Master Data" on a BOM tab to load examples.
+                    </td>
+                  </tr>
+                ) : (
+                  (masterData?.tax_codes || []).map(t => (
+                    <tr key={t.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono font-bold text-blue-700">{t.hsn_code}</td>
+                      <td className="p-3 font-semibold text-slate-900">{t.description}</td>
+                      <td className="p-3">{t.tax_type}</td>
+                      <td className="p-3 text-right font-mono">{t.tax_percentage.toFixed(1)} %</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                          ● {t.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

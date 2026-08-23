@@ -57,5 +57,25 @@ export const api = {
     });
     if (!res.ok) throw new Error('Failed to seed master data');
     return res.json();
-  }
+  },
+
+  async getTransactions(transactionType?: string) {
+    const query = transactionType ? `?transaction_type=${encodeURIComponent(transactionType)}` : '';
+    const res = await fetch(`${API_BASE}/transactions${query}`);
+    if (!res.ok) throw new Error('Failed to fetch transactions');
+    return res.json();
+  },
+
+  async createTransaction(payload: any) {
+    const res = await fetch(`${API_BASE}/transactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.detail || 'Failed to create transaction');
+    }
+    return res.json();
+  },
 };

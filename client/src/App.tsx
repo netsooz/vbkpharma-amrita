@@ -3,9 +3,10 @@ import { InventoryManagementDashboard } from './pages/InventoryManagementDashboa
 import { BatchExecutionWizard } from './pages/BatchExecutionWizard';
 import { BatchReportDashboard } from './pages/BatchReportDashboard';
 import { MasterDataDashboard } from './pages/MasterDataDashboard';
+import { TransactionsDashboard } from './pages/TransactionsDashboard';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'inventory' | 'manufacturing' | 'reports' | 'masterData'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'manufacturing' | 'reports' | 'masterData' | 'transactions'>('inventory');
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
@@ -46,6 +47,16 @@ function App() {
             🧬 Master Formulations (MDM)
           </button>
           <button
+            onClick={() => setActiveTab('transactions')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
+              activeTab === 'transactions'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+            }`}
+          >
+            🔁 Transactions
+          </button>
+          <button
             onClick={() => setActiveTab('manufacturing')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
               activeTab === 'manufacturing'
@@ -78,6 +89,7 @@ function App() {
       <main className="flex-1">
         {activeTab === 'inventory' && <InventoryManagementDashboard />}
         {activeTab === 'masterData' && <MasterDataDashboard />}
+        {activeTab === 'transactions' && <TransactionsDashboard />}
         {activeTab === 'manufacturing' && <BatchExecutionWizard />}
         {activeTab === 'reports' && <BatchReportDashboard />}
       </main>

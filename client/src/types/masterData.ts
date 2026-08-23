@@ -139,6 +139,61 @@ export interface MasterDataDashboardSummary {
   quarantine_lots: number;
 }
 
+export interface UnitOfMeasureMaster {
+  id: string;
+  uom_code: string;
+  uom_name: string;
+  uom_category: string;
+  base_uom_code?: string;
+  conversion_factor: number;
+  status: string;
+}
+
+export interface SpecificationParameterMaster {
+  id: string;
+  parameter_name: string;
+  test_method?: string;
+  min_limit?: string;
+  max_limit?: string;
+  uom?: string;
+  is_critical: boolean;
+}
+
+export interface SpecificationMaster {
+  id: string;
+  spec_code: string;
+  material_code: string;
+  material_name: string;
+  version: string;
+  status: string;
+  approved_by?: string;
+  approved_on?: string;
+  parameters: SpecificationParameterMaster[];
+}
+
+export interface CustomerMaster {
+  id: string;
+  customer_code: string;
+  customer_name: string;
+  customer_type: string;
+  gstin?: string;
+  contact_person?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  credit_limit: number;
+  status: string;
+}
+
+export interface TaxCodeMaster {
+  id: string;
+  hsn_code: string;
+  description: string;
+  tax_percentage: number;
+  tax_type: string;
+  status: string;
+}
+
 export interface MasterDataPayload {
   materials: MaterialMaster[];
   suppliers: SupplierMaster[];
@@ -146,5 +201,9 @@ export interface MasterDataPayload {
   locations: StorageLocationMaster[];
   formulations: FormulationMaster[];
   equipment: EquipmentItem[];
+  uom: UnitOfMeasureMaster[];
+  specifications: SpecificationMaster[];
+  customers: CustomerMaster[];
+  tax_codes: TaxCodeMaster[];
   summary?: MasterDataDashboardSummary;
 }

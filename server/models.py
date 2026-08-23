@@ -207,3 +207,98 @@ class AuditLog(Base):
     signature_meaning = Column(String(150), nullable=False)
     details_json = Column(JSON, default=dict)
     timestamp_utc = Column(DateTime, default=datetime.utcnow)
+
+
+class UnitOfMeasure(Base):
+    __tablename__ = "units_of_measure"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    uom_code = Column(String(20), unique=True, index=True, nullable=False)
+    uom_name = Column(String(100), nullable=False)
+    uom_category = Column(String(50), default="Weight")
+    base_uom_code = Column(String(20), nullable=True)
+    conversion_factor = Column(Float, default=1.0)
+    status = Column(String(50), default="Active")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SpecificationMaster(Base):
+    __tablename__ = "specification_masters"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    spec_code = Column(String(50), unique=True, index=True, nullable=False)
+    material_code = Column(String(50), nullable=False)
+    material_name = Column(String(200), nullable=False)
+    version = Column(String(20), default="v1.0")
+    status = Column(String(50), default="Approved")
+    approved_by = Column(String(150), nullable=True)
+    approved_on = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    parameters = relationship("SpecificationParameter", back_populates="specification", cascade="all, delete-orphan")
+
+
+class SpecificationParameter(Base):
+    __tablename__ = "specification_parameters"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    specification_id = Column(String, ForeignKey("specification_masters.id"), nullable=False)
+    parameter_name = Column(String(150), nullable=False)
+    test_method = Column(String(150), nullable=True)
+    min_limit = Column(String(50), nullable=True)
+    max_limit = Column(String(50), nullable=True)
+    uom = Column(String(20), nullable=True)
+    is_critical = Column(Boolean, default=False)
+
+    specification = relationship("SpecificationMaster", back_populates="parameters")
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    customer_code = Column(String(50), unique=True, index=True, nullable=False)
+    customer_name = Column(String(200), nullable=False)
+    customer_type = Column(String(100), default="Distributor")
+    gstin = Column(String(50), nullable=True)
+    contact_person = Column(String(150), nullable=True)
+    phone = Column(String(50), nullable=True)
+    email = Column(String(150), nullable=True)
+    address = Column(Text, nullable=True)
+    credit_limit = Column(Float, default=0.0)
+    status = Column(String(50), default="Active")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TaxCode(Base):
+    __tablename__ = "tax_codes"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    hsn_code = Column(String(20), unique=True, index=True, nullable=False)
+    description = Column(String(200), nullable=False)
+    tax_percentage = Column(Float, default=0.0)
+    tax_type = Column(String(50), default="GST")
+    status = Column(String(50), default="Active")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StockTransaction(Base):
+    __tablename__ = "stock_transactions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    transaction_code = Column(String(50), unique=True, index=True, nullable=False)
+    transaction_type = Column(String(50), nullable=False)
+    material_code = Column(String(50), nullable=False)
+    material_name = Column(String(200), nullable=False)
+    lot_number = Column(String(50), nullable=True)
+    quantity = Column(Float, nullable=False)
+    uom = Column(String(20), default="kg")
+    from_location = Column(String(100), nullable=True)
+    to_location = Column(String(100), nullable=True)
+    related_party = Column(String(200), nullable=True)
+    reference_doc = Column(String(150), nullable=True)
+    reason = Column(String(250), nullable=True)
+    performed_by = Column(String(150), nullable=False)
+    signature_meaning = Column(String(150), nullable=True)
+    status = Column(String(50), default="Completed")
+    transaction_date = Column(DateTime, default=datetime.utcnow)

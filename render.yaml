@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: vbkpharma-amrita-api
+    runtime: python
+    rootDir: server
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL
+        value: sqlite:///./amrita_demo.db
+      - key: CORS_ORIGINS
+        value: https://vbkpharma-amrita.onrender.com
+
+  - type: web
+    name: vbkpharma-amrita
+    runtime: static
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://vbkpharma-amrita-api.onrender.com

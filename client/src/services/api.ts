@@ -1,7 +1,6 @@
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api';
 
 export const api = {
-  // Inventory
   async getInventory() {
     const res = await fetch(`${API_BASE}/inventory`);
     if (!res.ok) throw new Error('Failed to fetch inventory');
@@ -28,17 +27,35 @@ export const api = {
     return res.json();
   },
 
-  // Batch Execution
   async getBatch(batchNumber: string) {
     const res = await fetch(`${API_BASE}/batch/${batchNumber}`);
     if (!res.ok) throw new Error('Failed to fetch batch');
     return res.json();
   },
 
-  // Audit Logs
   async getAuditLogs() {
     const res = await fetch(`${API_BASE}/audit-logs`);
     if (!res.ok) throw new Error('Failed to fetch audit logs');
+    return res.json();
+  },
+
+  async getMasterData() {
+    const res = await fetch(`${API_BASE}/master-data`);
+    if (!res.ok) throw new Error('Failed to fetch master data');
+    return res.json();
+  },
+
+  async getMasterDashboardSummary() {
+    const res = await fetch(`${API_BASE}/master-data/dashboard`);
+    if (!res.ok) throw new Error('Failed to fetch dashboard summary');
+    return res.json();
+  },
+
+  async seedMasterData() {
+    const res = await fetch(`${API_BASE}/master-data/seed`, {
+      method: 'GET',
+    });
+    if (!res.ok) throw new Error('Failed to seed master data');
     return res.json();
   }
 };

@@ -1,0 +1,16 @@
+# Python / Server
+server/venv/
+server/__pycache__/
+server/*.pyc
+server/.env
+server/amrita_demo.db
+
+# Node / Client
+client/node_modules/
+client/dist/
+client/.vite/
+.env.local
+
+# OS Files
+.DS_Store
+Thumbs.db

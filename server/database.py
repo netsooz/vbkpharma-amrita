@@ -20,6 +20,9 @@ else:
 
 is_sqlite = DATABASE_URL.startswith("sqlite")
 
+print("RAW DATABASE_URL:", repr(raw_db_url))
+print("FINAL DATABASE_URL:", repr(DATABASE_URL))
+
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False} if is_sqlite else {}

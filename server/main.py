@@ -8,6 +8,7 @@ from datetime import datetime
 
 from database import get_db, initialize_db
 import models
+from sqlalchemy.orm import selectinload
 
 initialize_db()
 
@@ -749,7 +750,7 @@ def get_master_data(db: Session = Depends(get_db)):
     suppliers = db.query(models.Supplier).all()
     manufacturers = db.query(models.Manufacturer).all()
     locations = db.query(models.StorageLocation).all()
-    formulations = db.query(models.Formulation).all()
+    formulations = db.query(models.Formulation).options(selectinload(models.Formulation.ingredients)).all()
     equipment = db.query(models.EquipmentMaster).all()
     return {
         "materials": materials,
@@ -848,7 +849,12 @@ def create_storage_location(item: StorageLocationCreate, db: Session = Depends(g
 
 @app.get("/api/formulations")
 def list_formulations(db: Session = Depends(get_db)):
-    return db.query(models.Formulation).order_by(models.Formulation.product_name.asc()).all()
+    return (
+        db.query(models.Formulation)
+        .options(selectinload(models.Formulation.ingredients))
+        .order_by(models.Formulation.product_name.asc())
+        .all()
+    )
 
 
 @app.post("/api/formulations")

@@ -56,7 +56,7 @@ export const AddMasterRecordModal: React.FC<AddMasterRecordModalProps> = ({
     try {
       const payload: Record<string, any> = {};
       fields.forEach(f => {
-        const raw = values[f.name];
+        const raw = values[f.name] ?? '';
         if (f.type === 'number') {
           payload[f.name] = raw === '' ? undefined : Number(raw);
         } else if (f.type === 'checkbox') {

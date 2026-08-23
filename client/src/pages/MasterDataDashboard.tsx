@@ -733,6 +733,7 @@ export const MasterDataDashboard: React.FC = () => {
 
       {activeAddConfig && (
         <AddMasterRecordModal
+          key={activeTab}
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
           onSave={activeAddConfig.onSave}

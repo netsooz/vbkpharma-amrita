@@ -5,15 +5,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-raw_db_url = os.getenv("DATABASE_URL", "")
+raw_db_url = os.getenv("DATABASE_URL", "").strip()
 
-# 1. Fallback to SQLite if DATABASE_URL is not set
-if not raw_db_url:
+# Resilient connection string resolver
+if not raw_db_url or "var/run/postgresql" in raw_db_url:
+    # Safe fallback to SQLite for instant online demo if Postgres URL isn't configured
     DATABASE_URL = "sqlite:///./amrita_demo.db"
-# 2. Fix Render's postgres:// or postgresql:// scheme to use the modern psycopg v3 driver
 elif raw_db_url.startswith("postgres://"):
     DATABASE_URL = raw_db_url.replace("postgres://", "postgresql+psycopg://", 1)
-elif raw_db_url.startswith("postgresql://"):
+elif raw_db_url.startswith("postgresql://") and not raw_db_url.startswith("postgresql+psycopg://"):
     DATABASE_URL = raw_db_url.replace("postgresql://", "postgresql+psycopg://", 1)
 else:
     DATABASE_URL = raw_db_url

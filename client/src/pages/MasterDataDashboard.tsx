@@ -49,8 +49,10 @@ const mapEquipment = (eq: any): EquipmentItem => ({
   lastLineClearanceBatch: eq.last_line_clearance_batch || '',
 });
 
+type MasterDataTab = 'formulations' | 'materials' | 'suppliers' | 'manufacturers' | 'locations' | 'equipment';
+
 export const MasterDataDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'formulations' | 'equipment'>('formulations');
+  const [activeTab, setActiveTab] = useState<MasterDataTab>('formulations');
   const [recipes, setRecipes] = useState<MasterRecipe[]>(INITIAL_RECIPES);
   const [equipmentList, setEquipmentList] = useState<EquipmentItem[]>(INITIAL_EQUIPMENT);
   const [masterData, setMasterData] = useState<MasterDataPayload | null>(null);
@@ -121,23 +123,25 @@ export const MasterDataDashboard: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex bg-white p-1 rounded-lg border border-slate-300 shadow-sm">
-          <button
-            onClick={() => setActiveTab('formulations')}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-md transition ${
-              activeTab === 'formulations' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            🧪 Formulation Master Recipes (eBOM)
-          </button>
-          <button
-            onClick={() => setActiveTab('equipment')}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-md transition ${
-              activeTab === 'equipment' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            🏭 Equipment Master & Calibration
-          </button>
+        <div className="flex flex-wrap bg-white p-1 rounded-lg border border-slate-300 shadow-sm gap-1">
+          {([
+            { key: 'formulations', label: '🧪 Formulation Master Recipes (eBOM)' },
+            { key: 'materials', label: '📦 Material Master' },
+            { key: 'suppliers', label: '🚚 Supplier Master' },
+            { key: 'manufacturers', label: '🏷️ Manufacturer Master' },
+            { key: 'locations', label: '📍 Storage Locations' },
+            { key: 'equipment', label: '🏭 Equipment Master & Calibration' },
+          ] as { key: MasterDataTab; label: string }[]).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition ${
+                activeTab === tab.key ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -328,6 +332,216 @@ export const MasterDataDashboard: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'materials' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h2 className="text-sm font-bold text-slate-900">Material Master (APIs, Excipients & Packaging)</h2>
+            <p className="text-xs text-slate-500">Approved raw materials with linked supplier, manufacturer and storage details.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-100 uppercase font-semibold text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th className="p-3">Material Code</th>
+                  <th className="p-3">Material Name</th>
+                  <th className="p-3">Type</th>
+                  <th className="p-3">Grade</th>
+                  <th className="p-3">UOM</th>
+                  <th className="p-3">Shelf Life (days)</th>
+                  <th className="p-3">Storage Condition</th>
+                  <th className="p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(masterData?.materials || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-slate-400">
+                      No materials found. Click "+ Seed Pharma Master Data" on the Formulations tab to load examples.
+                    </td>
+                  </tr>
+                ) : (
+                  (masterData?.materials || []).map(m => (
+                    <tr key={m.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono font-bold text-blue-700">{m.material_code}</td>
+                      <td className="p-3 font-semibold text-slate-900">{m.material_name}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-700 font-medium">
+                          {m.material_type}
+                        </span>
+                      </td>
+                      <td className="p-3">{m.grade || '—'}</td>
+                      <td className="p-3">{m.uom}</td>
+                      <td className="p-3">{m.shelf_life_days ?? '—'}</td>
+                      <td className="p-3">{m.storage_condition || '—'}</td>
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            m.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          ● {m.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'suppliers' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h2 className="text-sm font-bold text-slate-900">Supplier Master</h2>
+            <p className="text-xs text-slate-500">Qualified vendors for API, excipient and packaging supply.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-100 uppercase font-semibold text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th className="p-3">Supplier Code</th>
+                  <th className="p-3">Supplier Name</th>
+                  <th className="p-3">Type</th>
+                  <th className="p-3">Contact Person</th>
+                  <th className="p-3">Phone</th>
+                  <th className="p-3">Email</th>
+                  <th className="p-3">Qualification Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(masterData?.suppliers || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-slate-400">
+                      No suppliers found. Click "+ Seed Pharma Master Data" on the Formulations tab to load examples.
+                    </td>
+                  </tr>
+                ) : (
+                  (masterData?.suppliers || []).map(s => (
+                    <tr key={s.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono font-bold text-blue-700">{s.supplier_code}</td>
+                      <td className="p-3 font-semibold text-slate-900">{s.supplier_name}</td>
+                      <td className="p-3">{s.supplier_type}</td>
+                      <td className="p-3">{s.contact_person || '—'}</td>
+                      <td className="p-3">{s.phone || '—'}</td>
+                      <td className="p-3">{s.email || '—'}</td>
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            s.qualification_status === 'Approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          ● {s.qualification_status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'manufacturers' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h2 className="text-sm font-bold text-slate-900">Manufacturer Master</h2>
+            <p className="text-xs text-slate-500">GMP-approved manufacturing sites for sourced materials.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-100 uppercase font-semibold text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th className="p-3">Manufacturer Code</th>
+                  <th className="p-3">Manufacturer Name</th>
+                  <th className="p-3">Site Location</th>
+                  <th className="p-3">License Number</th>
+                  <th className="p-3">GMP Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(masterData?.manufacturers || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-8 text-slate-400">
+                      No manufacturers found. Click "+ Seed Pharma Master Data" on the Formulations tab to load examples.
+                    </td>
+                  </tr>
+                ) : (
+                  (masterData?.manufacturers || []).map(mfr => (
+                    <tr key={mfr.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono font-bold text-blue-700">{mfr.manufacturer_code}</td>
+                      <td className="p-3 font-semibold text-slate-900">{mfr.manufacturer_name}</td>
+                      <td className="p-3">{mfr.site_location || '—'}</td>
+                      <td className="p-3">{mfr.license_number || '—'}</td>
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            mfr.gmp_status === 'Approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          ● {mfr.gmp_status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'locations' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <h2 className="text-sm font-bold text-slate-900">Storage Location Master</h2>
+            <p className="text-xs text-slate-500">Warehouse bins, quarantine zones and controlled storage areas.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-100 uppercase font-semibold text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th className="p-3">Location Code</th>
+                  <th className="p-3">Location Name</th>
+                  <th className="p-3">Area Type</th>
+                  <th className="p-3">Room Condition</th>
+                  <th className="p-3">Quarantine Zone</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(masterData?.locations || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-8 text-slate-400">
+                      No storage locations found. Click "+ Seed Pharma Master Data" on the Formulations tab to load examples.
+                    </td>
+                  </tr>
+                ) : (
+                  (masterData?.locations || []).map(loc => (
+                    <tr key={loc.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono font-bold text-blue-700">{loc.location_code}</td>
+                      <td className="p-3 font-semibold text-slate-900">{loc.location_name}</td>
+                      <td className="p-3">{loc.area_type}</td>
+                      <td className="p-3">{loc.room_condition}</td>
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            loc.is_quarantine ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {loc.is_quarantine ? 'Quarantine' : 'General'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

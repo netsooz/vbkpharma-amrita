@@ -1,4 +1,5 @@
 print("######## MAIN.PY LOADED ########")
+import uuid
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -344,6 +345,7 @@ def seed_demo_content(db: Session) -> dict:
         version="v2.1",
         status="Approved",
         batch_size_kg=100.0,
+        unit_weight_mg=500.0,
         approved_by="Head of R&D",
         approved_on=datetime.utcnow(),
     )
@@ -387,6 +389,7 @@ def seed_demo_content(db: Session) -> dict:
         version="v1.0",
         status="Approved",
         batch_size_kg=100.0,
+        unit_weight_mg=500.0,
         approved_by="Head of R&D",
         approved_on=datetime.utcnow(),
     )
@@ -428,6 +431,7 @@ def seed_demo_content(db: Session) -> dict:
         version="v1.0",
         status="Approved",
         batch_size_kg=1.0,
+        units_per_pack=100,
         approved_by="Packaging Engineering",
         approved_on=datetime.utcnow(),
     )
@@ -768,6 +772,8 @@ class FormulationCreate(BaseModel):
     version: str = "v1.0"
     status: str = "Draft"
     batch_size_kg: float = 100.0
+    unit_weight_mg: Optional[float] = None
+    units_per_pack: Optional[int] = None
     approved_by: Optional[str] = None
     ingredients: List[FormulationIngredientCreate] = []
 
@@ -839,7 +845,7 @@ class StockTransactionCreate(BaseModel):
     material_code: str
     material_name: str
     lot_number: Optional[str] = None
-    quantity: float
+    quantity: float = 0.0
     uom: str = "kg"
     from_location: Optional[str] = None
     to_location: Optional[str] = None
@@ -848,6 +854,7 @@ class StockTransactionCreate(BaseModel):
     reason: Optional[str] = None
     performed_by: str
     signature_meaning: Optional[str] = None
+    scanned_value: Optional[str] = None
 
 
 @app.get("/")
@@ -1096,6 +1103,8 @@ def create_formulation(item: FormulationCreate, db: Session = Depends(get_db)):
         version=item.version,
         status=item.status,
         batch_size_kg=item.batch_size_kg,
+        unit_weight_mg=item.unit_weight_mg,
+        units_per_pack=item.units_per_pack,
         approved_by=item.approved_by,
     )
     db.add(formulation)
@@ -1252,6 +1261,8 @@ VALID_TRANSACTION_TYPES = {
     "STOCK_ADJUSTMENT",
     "MATERIAL_REJECTION",
     "SAMPLE_WITHDRAWAL",
+    "BARCODE_GENERATION",
+    "BARCODE_VALIDATION",
 }
 
 TRANSACTION_CODE_PREFIXES = {
@@ -1263,10 +1274,14 @@ TRANSACTION_CODE_PREFIXES = {
     "STOCK_ADJUSTMENT": "ADJ",
     "MATERIAL_REJECTION": "REJ",
     "SAMPLE_WITHDRAWAL": "SPL",
+    "BARCODE_GENERATION": "BCG",
+    "BARCODE_VALIDATION": "BCV",
 }
 
 # Transaction types that consume/reduce a lot's on-hand quantity
 _QUANTITY_REDUCING_TYPES = {"MATERIAL_ISSUE", "GOODS_RETURN_SUPPLIER", "MATERIAL_REJECTION", "SAMPLE_WITHDRAWAL"}
+# Transaction types where quantity is not applicable (barcode operations reference a lot, not a movement)
+_QUANTITY_EXEMPT_TYPES = {"BARCODE_GENERATION", "BARCODE_VALIDATION"}
 
 
 @app.get("/api/transactions")
@@ -1282,8 +1297,10 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
     txn_type = item.transaction_type.upper()
     if txn_type not in VALID_TRANSACTION_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported transaction type: {item.transaction_type}")
-    if item.quantity == 0:
+    if txn_type not in _QUANTITY_EXEMPT_TYPES and item.quantity == 0:
         raise HTTPException(status_code=400, detail="Quantity must be non-zero")
+    if txn_type in ("BARCODE_GENERATION", "BARCODE_VALIDATION") and not item.lot_number:
+        raise HTTPException(status_code=400, detail="Lot number is required for barcode operations")
 
     prefix = TRANSACTION_CODE_PREFIXES[txn_type]
     existing_count = db.query(models.StockTransaction).filter(models.StockTransaction.transaction_type == txn_type).count()
@@ -1295,7 +1312,26 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
         if not lot:
             raise HTTPException(status_code=404, detail=f"Lot {item.lot_number} not found")
 
-    if lot:
+    txn_status = "Completed"
+    reference_doc = item.reference_doc
+    reason = item.reason
+
+    if txn_type == "BARCODE_GENERATION":
+        generated_barcode = f"BC-{lot.material_code}-{lot.lot_number}-{uuid.uuid4().hex[:6].upper()}"
+        lot.barcode = generated_barcode
+        reference_doc = generated_barcode
+        reason = reason or "Barcode generated and assigned to lot"
+    elif txn_type == "BARCODE_VALIDATION":
+        if not item.scanned_value:
+            raise HTTPException(status_code=400, detail="Scanned barcode value is required for validation")
+        if lot.barcode and lot.barcode == item.scanned_value:
+            txn_status = "Passed"
+            reason = reason or "Scanned barcode matches lot record"
+        else:
+            txn_status = "Failed"
+            reason = reason or "Scanned barcode does not match lot record"
+        reference_doc = item.scanned_value
+    elif lot:
         if txn_type in _QUANTITY_REDUCING_TYPES:
             if lot.quantity < item.quantity:
                 raise HTTPException(status_code=400, detail="Insufficient lot quantity for this transaction")
@@ -1325,11 +1361,11 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
         from_location=item.from_location,
         to_location=item.to_location,
         related_party=item.related_party,
-        reference_doc=item.reference_doc,
-        reason=item.reason,
+        reference_doc=reference_doc,
+        reason=reason,
         performed_by=item.performed_by,
         signature_meaning=signature_meaning,
-        status="Completed",
+        status=txn_status,
     )
     db.add(transaction)
 
@@ -1346,6 +1382,7 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
             "lot_number": item.lot_number,
             "from_location": item.from_location,
             "to_location": item.to_location,
+            "status": txn_status,
         },
     )
     db.add(audit)
@@ -1353,6 +1390,50 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
     db.commit()
     db.refresh(transaction)
     return transaction
+
+
+@app.delete("/api/transactions/{transaction_id}")
+def delete_transaction(transaction_id: str, db: Session = Depends(get_db)):
+    transaction = db.query(models.StockTransaction).filter(models.StockTransaction.id == transaction_id).first()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    txn_type = transaction.transaction_type
+    lot = None
+    if transaction.lot_number:
+        lot = db.query(models.InventoryLot).filter(models.InventoryLot.lot_number == transaction.lot_number).first()
+
+    # Reverse the stock effect this transaction originally applied, so deleting keeps stock consistent.
+    if lot:
+        if txn_type in _QUANTITY_REDUCING_TYPES:
+            lot.quantity += transaction.quantity
+        elif txn_type in ("MATERIAL_RETURN", "GOODS_INWARD"):
+            if lot.quantity - transaction.quantity < 0:
+                raise HTTPException(status_code=400, detail="Cannot delete: reversing this transaction would result in negative stock")
+            lot.quantity -= transaction.quantity
+        elif txn_type == "STOCK_ADJUSTMENT":
+            lot.quantity -= transaction.quantity
+        elif txn_type == "STOCK_TRANSFER" and transaction.from_location:
+            lot.storage_location = transaction.from_location
+        elif txn_type == "BARCODE_GENERATION" and lot.barcode == transaction.reference_doc:
+            lot.barcode = None
+
+    audit = models.AuditLog(
+        entity_name="StockTransaction",
+        entity_id=transaction.transaction_code,
+        action=f"DELETE_{txn_type}",
+        performed_by="System",
+        signature_meaning="Transaction Deletion / Reversal",
+        details_json={
+            "material_code": transaction.material_code,
+            "quantity": transaction.quantity,
+            "lot_number": transaction.lot_number,
+        },
+    )
+    db.add(audit)
+    db.delete(transaction)
+    db.commit()
+    return {"message": f"Transaction {transaction.transaction_code} deleted and stock effect reversed"}
 
 
 @app.get("/api/master-data/seed")

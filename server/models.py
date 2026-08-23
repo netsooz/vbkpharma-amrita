@@ -99,6 +99,7 @@ class InventoryLot(Base):
     received_date = Column(DateTime, default=datetime.utcnow)
     released_by = Column(String(150), nullable=True)
     release_date = Column(String(50), nullable=True)
+    barcode = Column(String(100), nullable=True)
 
 
 class Formulation(Base):
@@ -113,6 +114,8 @@ class Formulation(Base):
     version = Column(String(20), default="v1.0")
     status = Column(String(50), default="Draft")
     batch_size_kg = Column(Float, default=100.0)
+    unit_weight_mg = Column(Float, nullable=True)
+    units_per_pack = Column(Integer, nullable=True)
     approved_by = Column(String(150), nullable=True)
     approved_on = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

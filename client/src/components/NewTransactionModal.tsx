@@ -1,6 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { StockTransactionCreatePayload, TransactionType } from '../types/transactions';
 import { TRANSACTION_TYPES } from '../types/transactions';
+import { api } from '../services/api';
+
+interface MaterialOption {
+  material_code: string;
+  material_name: string;
+  material_type: string;
+}
 
 interface NewTransactionModalProps {
   isOpen: boolean;
@@ -19,8 +26,8 @@ const PARTY_LABELS: Partial<Record<TransactionType, string>> = {
 
 export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen, onClose, onSave, defaultType }) => {
   const [transactionType, setTransactionType] = useState<TransactionType>(defaultType || 'MATERIAL_ISSUE');
+  const [materials, setMaterials] = useState<MaterialOption[]>([]);
   const [materialCode, setMaterialCode] = useState('');
-  const [materialName, setMaterialName] = useState('');
   const [lotNumber, setLotNumber] = useState('');
   const [quantity, setQuantity] = useState<number>(0);
   const [uom, setUom] = useState('kg');
@@ -30,17 +37,26 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
   const [referenceDoc, setReferenceDoc] = useState('');
   const [reason, setReason] = useState('');
   const [performedBy, setPerformedBy] = useState('');
+  const [scannedValue, setScannedValue] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    api.getMaterials()
+      .then((data: MaterialOption[]) => setMaterials(data))
+      .catch(() => setMaterials([]));
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const meta = TRANSACTION_TYPES.find(t => t.type === transactionType)!;
-  const needsLocations = LOCATION_REQUIRED_TYPES.includes(transactionType) || transactionType === 'STOCK_TRANSFER';
+  const isBarcodeType = transactionType === 'BARCODE_GENERATION' || transactionType === 'BARCODE_VALIDATION';
+  const needsLocations = !isBarcodeType && (LOCATION_REQUIRED_TYPES.includes(transactionType) || transactionType === 'STOCK_TRANSFER');
+  const selectedMaterial = materials.find(m => m.material_code === materialCode);
 
   const resetForm = () => {
     setMaterialCode('');
-    setMaterialName('');
     setLotNumber('');
     setQuantity(0);
     setFromLocation('');
@@ -49,13 +65,26 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
     setReferenceDoc('');
     setReason('');
     setPerformedBy('');
+    setScannedValue('');
     setError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!materialCode.trim() || !materialName.trim() || !performedBy.trim() || !quantity) {
-      setError('Material code/name, quantity, and performed-by are required.');
+    if (!selectedMaterial || !performedBy.trim()) {
+      setError('Please select a valid material (from Raw Materials / Packaging Materials master) and enter Performed By.');
+      return;
+    }
+    if (isBarcodeType && !lotNumber.trim()) {
+      setError('Lot number is required for barcode operations.');
+      return;
+    }
+    if (transactionType === 'BARCODE_VALIDATION' && !scannedValue.trim()) {
+      setError('Scanned barcode value is required for barcode validation.');
+      return;
+    }
+    if (!isBarcodeType && !quantity) {
+      setError('Quantity is required for this transaction type.');
       return;
     }
 
@@ -64,10 +93,10 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
     try {
       await onSave({
         transaction_type: transactionType,
-        material_code: materialCode.trim(),
-        material_name: materialName.trim(),
+        material_code: selectedMaterial.material_code,
+        material_name: selectedMaterial.material_name,
         lot_number: lotNumber.trim() || undefined,
-        quantity: Number(quantity),
+        quantity: isBarcodeType ? 0 : Number(quantity),
         uom,
         from_location: fromLocation.trim() || undefined,
         to_location: toLocation.trim() || undefined,
@@ -75,6 +104,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
         reference_doc: referenceDoc.trim() || undefined,
         reason: reason.trim() || undefined,
         performed_by: performedBy.trim(),
+        scanned_value: scannedValue.trim() || undefined,
       });
       resetForm();
       onClose();
@@ -110,34 +140,35 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
             </select>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Material Code</label>
-            <input
-              type="text"
+          <div className="col-span-2">
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+              Material (Raw Material / Packaging Material)
+            </label>
+            <select
               required
               value={materialCode}
               onChange={(e) => setMaterialCode(e.target.value)}
-              placeholder="e.g. API-PCM-01"
               className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600"
-            />
+            >
+              <option value="">Select a material…</option>
+              {materials.map(m => (
+                <option key={m.material_code} value={m.material_code}>
+                  {m.material_code} — {m.material_name} ({m.material_type})
+                </option>
+              ))}
+            </select>
+            {materials.length === 0 && (
+              <p className="mt-1 text-[11px] text-amber-600">
+                No materials found. Seed master data or add materials before recording transactions.
+              </p>
+            )}
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Material Name</label>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Lot Number {isBarcodeType ? '' : '(optional)'}</label>
             <input
               type="text"
-              required
-              value={materialName}
-              onChange={(e) => setMaterialName(e.target.value)}
-              placeholder="e.g. Paracetamol IP/USP"
-              className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Lot Number (optional)</label>
-            <input
-              type="text"
+              required={isBarcodeType}
               value={lotNumber}
               onChange={(e) => setLotNumber(e.target.value)}
               placeholder="e.g. LOT-INV-001"
@@ -145,28 +176,44 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
             />
           </div>
 
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Quantity</label>
-              <input
-                type="number"
-                step="0.01"
-                required
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-                className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600"
-              />
+          {isBarcodeType ? (
+            transactionType === 'BARCODE_VALIDATION' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Scanned Barcode Value</label>
+                <input
+                  type="text"
+                  required
+                  value={scannedValue}
+                  onChange={(e) => setScannedValue(e.target.value)}
+                  placeholder="Scan or paste the barcode value"
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+            )
+          ) : (
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Quantity</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={quantity}
+                  onChange={(e) => setQuantity(Number(e.target.value))}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+              <div className="w-24">
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">UOM</label>
+                <input
+                  type="text"
+                  value={uom}
+                  onChange={(e) => setUom(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
             </div>
-            <div className="w-24">
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">UOM</label>
-              <input
-                type="text"
-                value={uom}
-                onChange={(e) => setUom(e.target.value)}
-                className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600"
-              />
-            </div>
-          </div>
+          )}
 
           {needsLocations && (
             <>

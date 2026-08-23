@@ -78,4 +78,19 @@ export const api = {
     }
     return res.json();
   },
+
+  async deleteTransaction(id: string) {
+    const res = await fetch(`${API_BASE}/transactions/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.detail || 'Failed to delete transaction');
+    }
+    return res.json();
+  },
+
+  async getMaterials() {
+    const res = await fetch(`${API_BASE}/materials`);
+    if (!res.ok) throw new Error('Failed to fetch materials');
+    return res.json();
+  },
 };

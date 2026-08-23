@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { InventoryManagementDashboard } from './pages/InventoryManagementDashboard';
 import { BatchExecutionWizard } from './pages/BatchExecutionWizard';
 import { BatchReportDashboard } from './pages/BatchReportDashboard';
 import { MasterDataDashboard } from './pages/MasterDataDashboard';
 import { TransactionsDashboard } from './pages/TransactionsDashboard';
+import { BOMDashboard } from './pages/BOMDashboard';
+import { ReportsDashboard } from './pages/ReportsDashboard';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'inventory' | 'manufacturing' | 'reports' | 'masterData' | 'transactions'>('inventory');
+  const [activeTab, setActiveTab] = useState<'masterData' | 'transactions' | 'boms' | 'manufacturing' | 'ebpr' | 'reports'>('masterData');
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
@@ -27,16 +28,6 @@ function App() {
         {/* Tab Navigation */}
         <nav className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700">
           <button
-            onClick={() => setActiveTab('inventory')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
-              activeTab === 'inventory'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            📦 Raw Materials & Quarantine
-          </button>
-          <button
             onClick={() => setActiveTab('masterData')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
               activeTab === 'masterData'
@@ -44,7 +35,7 @@ function App() {
                 : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
             }`}
           >
-            🧬 Master Formulations (MDM)
+            🧬 Master Data Management
           </button>
           <button
             onClick={() => setActiveTab('transactions')}
@@ -57,6 +48,16 @@ function App() {
             🔁 Transactions
           </button>
           <button
+            onClick={() => setActiveTab('boms')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
+              activeTab === 'boms'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+            }`}
+          >
+            🧪 BOMs
+          </button>
+          <button
             onClick={() => setActiveTab('manufacturing')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
               activeTab === 'manufacturing'
@@ -67,6 +68,16 @@ function App() {
             ⚙️ 10-Step Batch Execution
           </button>
           <button
+            onClick={() => setActiveTab('ebpr')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
+              activeTab === 'ebpr'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+            }`}
+          >
+            📑 eBPR Records & Audit
+          </button>
+          <button
             onClick={() => setActiveTab('reports')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
               activeTab === 'reports'
@@ -74,7 +85,7 @@ function App() {
                 : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
             }`}
           >
-            📑 eBPR Records & Audit
+            📊 Reports
           </button>
         </nav>
 
@@ -87,11 +98,12 @@ function App() {
 
       {/* Main View Area */}
       <main className="flex-1">
-        {activeTab === 'inventory' && <InventoryManagementDashboard />}
         {activeTab === 'masterData' && <MasterDataDashboard />}
         {activeTab === 'transactions' && <TransactionsDashboard />}
+        {activeTab === 'boms' && <BOMDashboard />}
         {activeTab === 'manufacturing' && <BatchExecutionWizard />}
-        {activeTab === 'reports' && <BatchReportDashboard />}
+        {activeTab === 'ebpr' && <BatchReportDashboard />}
+        {activeTab === 'reports' && <ReportsDashboard />}
       </main>
     </div>
   );

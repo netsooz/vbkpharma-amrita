@@ -6,7 +6,9 @@ export type TransactionType =
   | 'STOCK_TRANSFER'
   | 'STOCK_ADJUSTMENT'
   | 'MATERIAL_REJECTION'
-  | 'SAMPLE_WITHDRAWAL';
+  | 'SAMPLE_WITHDRAWAL'
+  | 'BARCODE_GENERATION'
+  | 'BARCODE_VALIDATION';
 
 export interface TransactionTypeMeta {
   type: TransactionType;
@@ -24,6 +26,8 @@ export const TRANSACTION_TYPES: TransactionTypeMeta[] = [
   { type: 'STOCK_ADJUSTMENT', label: 'Stock Adjustment', description: 'Physical stock count correction (positive or negative variance)', icon: '⚖️' },
   { type: 'MATERIAL_REJECTION', label: 'Material Rejection', description: 'QC-rejected material moved out of usable stock', icon: '🚫' },
   { type: 'SAMPLE_WITHDRAWAL', label: 'Sample Withdrawal', description: 'QC/stability sample pulled from a lot', icon: '🧪' },
+  { type: 'BARCODE_GENERATION', label: 'Barcode Generation', description: 'Assign and print a traceability barcode for a lot (GS1/serialization)', icon: '🏷️' },
+  { type: 'BARCODE_VALIDATION', label: 'Barcode Validation', description: 'Scan and verify a lot barcode before dispensing, receipt or dispatch', icon: '🔍' },
 ];
 
 export interface StockTransactionRecord {
@@ -51,7 +55,7 @@ export interface StockTransactionCreatePayload {
   material_code: string;
   material_name: string;
   lot_number?: string;
-  quantity: number;
+  quantity?: number;
   uom: string;
   from_location?: string;
   to_location?: string;
@@ -60,4 +64,5 @@ export interface StockTransactionCreatePayload {
   reason?: string;
   performed_by: string;
   signature_meaning?: string;
+  scanned_value?: string;
 }

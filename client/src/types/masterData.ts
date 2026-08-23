@@ -35,6 +35,8 @@ export interface MasterRecipe {
   version: string;
   status: 'Draft' | 'Approved' | 'Obsolete';
   baseBatchSizeKg: number;
+  unitWeightMg?: number;
+  unitsPerPack?: number;
   ingredients: RecipeIngredient[];
   stageParameters: StageParameterSpec[];
   approvedBy?: string;
@@ -125,6 +127,8 @@ export interface FormulationMaster {
   version: string;
   status: string;
   batch_size_kg: number;
+  unit_weight_mg?: number;
+  units_per_pack?: number;
   approved_by?: string;
   approved_on?: string;
   ingredients?: FormulationIngredientMaster[];

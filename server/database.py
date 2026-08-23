@@ -5,16 +5,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Modern psycopg v3 driver format: postgresql+psycopg://
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql+psycopg://postgres:postgres@localhost:5432/amrita_pharma_mes"
-)
+raw_db_url = os.getenv("DATABASE_URL", "")
 
-# SQLite fallback for instant local testing without needing PostgreSQL installed yet
-if not os.getenv("DATABASE_URL"):
-    # If no custom DB URL is provided and PostgreSQL isn't running, you can use SQLite for instant demo:
+# 1. Fallback to SQLite if DATABASE_URL is not set
+if not raw_db_url:
     DATABASE_URL = "sqlite:///./amrita_demo.db"
+# 2. Fix Render's postgres:// or postgresql:// scheme to use the modern psycopg v3 driver
+elif raw_db_url.startswith("postgres://"):
+    DATABASE_URL = raw_db_url.replace("postgres://", "postgresql+psycopg://", 1)
+elif raw_db_url.startswith("postgresql://"):
+    DATABASE_URL = raw_db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+else:
+    DATABASE_URL = raw_db_url
 
 is_sqlite = DATABASE_URL.startswith("sqlite")
 

@@ -17,6 +17,188 @@ app = FastAPI(
     version="1.0.0"
 )
 
+
+def seed_demo_content(db: Session) -> dict:
+    if db.query(models.Supplier).count() > 0:
+        return {"message": "Master data already seeded", "seeded": False}
+
+    supplier1 = models.Supplier(
+        supplier_code="SUP-001",
+        supplier_name="Apex Pharma Ingredients",
+        supplier_type="API",
+        qualification_status="Approved",
+    )
+    supplier2 = models.Supplier(
+        supplier_code="SUP-002",
+        supplier_name="Cellulose Labs Ltd",
+        supplier_type="Excipient",
+        qualification_status="Approved",
+    )
+    supplier3 = models.Supplier(
+        supplier_code="SUP-003",
+        supplier_name="Prime Pack Solutions",
+        supplier_type="Packaging",
+        qualification_status="Approved",
+    )
+    db.add_all([supplier1, supplier2, supplier3])
+    db.flush()
+
+    manufacturer1 = models.Manufacturer(
+        manufacturer_code="MFR-001",
+        manufacturer_name="Apex Pharma Pvt Ltd",
+        site_location="Hyderabad",
+        gmp_status="Approved",
+    )
+    db.add(manufacturer1)
+    db.flush()
+
+    storage1 = models.StorageLocation(
+        location_code="WH-01",
+        location_name="Warehouse A",
+        area_type="Warehouse",
+        room_condition="Controlled",
+        is_quarantine=False,
+    )
+    storage2 = models.StorageLocation(
+        location_code="QC-01",
+        location_name="Quarantine Zone",
+        area_type="QC Hold",
+        room_condition="Controlled",
+        is_quarantine=True,
+    )
+    db.add_all([storage1, storage2])
+    db.flush()
+
+    material1 = models.MaterialMaster(
+        material_code="API-PCM-01",
+        material_name="Paracetamol IP/USP",
+        material_type="API",
+        category="Active Pharma Ingredient",
+        grade="USP",
+        strength="500 mg",
+        uom="kg",
+        shelf_life_days=730,
+        storage_condition="Controlled Room",
+        status="Approved",
+        supplier_id=supplier1.id,
+        manufacturer_id=manufacturer1.id,
+        storage_location_id=storage1.id,
+        approved_by="QA Lead",
+        approved_on=datetime.utcnow(),
+    )
+    material2 = models.MaterialMaster(
+        material_code="EXC-MCC-02",
+        material_name="Microcrystalline Cellulose PH-102",
+        material_type="Excipient",
+        category="Excipient",
+        grade="Pharma Grade",
+        uom="kg",
+        shelf_life_days=540,
+        storage_condition="Controlled Room",
+        status="Approved",
+        supplier_id=supplier2.id,
+        storage_location_id=storage1.id,
+        approved_by="QA Lead",
+        approved_on=datetime.utcnow(),
+    )
+    db.add_all([material1, material2])
+    db.flush()
+
+    formulation = models.Formulation(
+        formulation_code="MR-PCM-500ER",
+        product_name="Paracetamol 500mg Extended Release",
+        dosage_form="Tablet",
+        strength="500 mg",
+        version="v2.1",
+        status="Approved",
+        batch_size_kg=100.0,
+        approved_by="Head of R&D",
+        approved_on=datetime.utcnow(),
+    )
+    db.add(formulation)
+    db.flush()
+
+    db.add_all([
+        models.FormulationIngredient(
+            formulation_id=formulation.id,
+            material_id=material1.id,
+            material_code=material1.material_code,
+            material_name=material1.material_name,
+            material_type=material1.material_type,
+            required_quantity=90.0,
+            uom="kg",
+            percentage_w_w=90.0,
+            tolerance_pct=0.5,
+            is_critical=True,
+        ),
+        models.FormulationIngredient(
+            formulation_id=formulation.id,
+            material_id=material2.id,
+            material_code=material2.material_code,
+            material_name=material2.material_name,
+            material_type=material2.material_type,
+            required_quantity=7.5,
+            uom="kg",
+            percentage_w_w=7.5,
+            tolerance_pct=1.0,
+            is_critical=False,
+        ),
+    ])
+
+    equipment = models.EquipmentMaster(
+        equipment_code="PRESS-36STN",
+        equipment_name="36-Station Rotary Tablet Press",
+        category="Tablet Press",
+        model_number="Korsch XL-400",
+        manufacturer="Korsch AG",
+        room_location="Compression Suite A",
+        calibration_date="2026-06-20",
+        calibration_due_date="2026-12-20",
+        status="Qualified & Available",
+        last_line_clearance_batch="TAB-2026-004",
+    )
+    db.add(equipment)
+
+    inventory_lot_1 = models.InventoryLot(
+        lot_number="LOT-INV-001",
+        material_code=material1.material_code,
+        material_name=material1.material_name,
+        material_type=material1.material_type,
+        supplier=supplier1.supplier_name,
+        supplier_lot="SUP-LOT-1001",
+        quantity=120.0,
+        uom="kg",
+        storage_location="WH-01",
+        expiry_date="2027-12-31",
+        status="Quarantine",
+    )
+    inventory_lot_2 = models.InventoryLot(
+        lot_number="LOT-INV-002",
+        material_code=material2.material_code,
+        material_name=material2.material_name,
+        material_type=material2.material_type,
+        supplier=supplier2.supplier_name,
+        supplier_lot="SUP-LOT-2002",
+        quantity=75.0,
+        uom="kg",
+        storage_location="WH-01",
+        expiry_date="2028-06-30",
+        status="Approved",
+    )
+    db.add_all([inventory_lot_1, inventory_lot_2])
+
+    db.commit()
+    return {"message": "Master data seeded successfully", "seeded": True}
+
+
+def ensure_demo_seed() -> None:
+    db = next(get_db())
+    try:
+        seed_demo_content(db)
+    finally:
+        db.close()
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,6 +206,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+ensure_demo_seed()
 
 
 class InventoryItemCreate(BaseModel):
@@ -422,148 +606,7 @@ def create_equipment(item: EquipmentCreate, db: Session = Depends(get_db)):
 
 @app.get("/api/master-data/seed")
 def seed_master_data(db: Session = Depends(get_db)):
-    if db.query(models.Supplier).count() > 0:
-        return {"message": "Master data already seeded", "seeded": False}
-
-    supplier1 = models.Supplier(
-        supplier_code="SUP-001",
-        supplier_name="Apex Pharma Ingredients",
-        supplier_type="API",
-        qualification_status="Approved",
-    )
-    supplier2 = models.Supplier(
-        supplier_code="SUP-002",
-        supplier_name="Cellulose Labs Ltd",
-        supplier_type="Excipient",
-        qualification_status="Approved",
-    )
-    supplier3 = models.Supplier(
-        supplier_code="SUP-003",
-        supplier_name="Prime Pack Solutions",
-        supplier_type="Packaging",
-        qualification_status="Approved",
-    )
-    db.add_all([supplier1, supplier2, supplier3])
-    db.flush()
-
-    manufacturer1 = models.Manufacturer(
-        manufacturer_code="MFR-001",
-        manufacturer_name="Apex Pharma Pvt Ltd",
-        site_location="Hyderabad",
-        gmp_status="Approved",
-    )
-    db.add(manufacturer1)
-    db.flush()
-
-    storage1 = models.StorageLocation(
-        location_code="WH-01",
-        location_name="Warehouse A",
-        area_type="Warehouse",
-        room_condition="Controlled",
-        is_quarantine=False,
-    )
-    storage2 = models.StorageLocation(
-        location_code="QC-01",
-        location_name="Quarantine Zone",
-        area_type="QC Hold",
-        room_condition="Controlled",
-        is_quarantine=True,
-    )
-    db.add_all([storage1, storage2])
-    db.flush()
-
-    material1 = models.MaterialMaster(
-        material_code="API-PCM-01",
-        material_name="Paracetamol IP/USP",
-        material_type="API",
-        category="Active Pharma Ingredient",
-        grade="USP",
-        strength="500 mg",
-        uom="kg",
-        shelf_life_days=730,
-        storage_condition="Controlled Room",
-        status="Approved",
-        supplier_id=supplier1.id,
-        manufacturer_id=manufacturer1.id,
-        storage_location_id=storage1.id,
-        approved_by="QA Lead",
-        approved_on=datetime.utcnow(),
-    )
-    material2 = models.MaterialMaster(
-        material_code="EXC-MCC-02",
-        material_name="Microcrystalline Cellulose PH-102",
-        material_type="Excipient",
-        category="Excipient",
-        grade="Pharma Grade",
-        uom="kg",
-        shelf_life_days=540,
-        storage_condition="Controlled Room",
-        status="Approved",
-        supplier_id=supplier2.id,
-        storage_location_id=storage1.id,
-        approved_by="QA Lead",
-        approved_on=datetime.utcnow(),
-    )
-    db.add_all([material1, material2])
-    db.flush()
-
-    formulation = models.Formulation(
-        formulation_code="MR-PCM-500ER",
-        product_name="Paracetamol 500mg Extended Release",
-        dosage_form="Tablet",
-        strength="500 mg",
-        version="v2.1",
-        status="Approved",
-        batch_size_kg=100.0,
-        approved_by="Head of R&D",
-        approved_on=datetime.utcnow(),
-    )
-    db.add(formulation)
-    db.flush()
-
-    db.add_all([
-        models.FormulationIngredient(
-            formulation_id=formulation.id,
-            material_id=material1.id,
-            material_code=material1.material_code,
-            material_name=material1.material_name,
-            material_type=material1.material_type,
-            required_quantity=90.0,
-            uom="kg",
-            percentage_w_w=90.0,
-            tolerance_pct=0.5,
-            is_critical=True,
-        ),
-        models.FormulationIngredient(
-            formulation_id=formulation.id,
-            material_id=material2.id,
-            material_code=material2.material_code,
-            material_name=material2.material_name,
-            material_type=material2.material_type,
-            required_quantity=7.5,
-            uom="kg",
-            percentage_w_w=7.5,
-            tolerance_pct=1.0,
-            is_critical=False,
-        ),
-    ])
-
-    equipment = models.EquipmentMaster(
-        equipment_code="PRESS-36STN",
-        equipment_name="36-Station Rotary Tablet Press",
-        category="Tablet Press",
-        model_number="Korsch XL-400",
-        manufacturer="Korsch AG",
-        room_location="Compression Suite A",
-        calibration_date="2026-06-20",
-        calibration_due_date="2026-12-20",
-        status="Qualified & Available",
-        last_line_clearance_batch="TAB-2026-004",
-    )
-    db.add(equipment)
-
-    db.commit()
-    return {"message": "Master data seeded successfully", "seeded": True}
+    return seed_demo_content(db)
 
 
 @app.get("/api/master-data/dashboard")

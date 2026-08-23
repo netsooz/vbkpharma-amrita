@@ -18,6 +18,195 @@ app = FastAPI(
 )
 
 
+# Raw material catalog sourced from Reference/2025-07-10 FDA Raw Material List.pdf
+FDA_RAW_MATERIALS = [
+    ("AC01", "Acetaminophen USP Dense Powder"),
+    ("AC02", "Acacia NF Powder"),
+    ("AC03", "Acetaminophen 90% Granular"),
+    ("AL01", "Alcohol USP 95%"),
+    ("AP02", "Apricot Peach Flavor #PFC8500 (F&J)"),
+    ("AP03", "Apricot Flavor #5.1003 (Bell)"),
+    ("BB01", "Blueberry Flavor Art #FC1027 (Ungerer)"),
+    ("BB02", "Blueberry Flavor #0332 (MM)"),
+    ("BE01", "Benzalkonium Chloride Solution NF 50%"),
+    ("BE02", "Benzoic Acid USP"),
+    ("BI01", "Bitter Masking Agent Art #14078 (Ungerer)"),
+    ("BL01", "FD&C Blue #1 Dye Powder"),
+    ("BL1L", "FD&C Blue #1 Aluminum Lake"),
+    ("BPS2", "Bromfed Mixture #2 (6-60) SR Beads"),
+    ("BPS3", "Bromfed Mixture #3 (6-60) SR Beads"),
+    ("BR01", "Brompheniramine Maleate USP Fine Powder"),
+    ("BR02", "Brompheniramine Maleate USP"),
+    ("BU01", "Butylparaben USP/NF"),
+    ("BU02", "Butalbital"),
+    ("CA01", "Calcium Stearate NF Powder"),
+    ("CA02", "Caffeine USP Anhydrous"),
+    ("CA05", "Calcium Sulfate Anhydrous"),
+    ("CA07", "Calcium Phosphate Dibasic USP Dihydrate"),
+    ("CA08", "Caramel Color #AP100 (Sethness)"),
+    ("CA09", "Carbinoxamine Maleate USP"),
+    ("CA10", "Calcium Phosphate Dibasic USP Anhydrous"),
+    ("CH01", "Chlorpheniramine Maleate USP Fine Powder"),
+    ("CH02", "Chloroxylenol USP"),
+    ("CH03", "Chlorpheniramine Maleate USP"),
+    ("CHF1", "Cherry Blend #PFC8513 (F&J)"),
+    ("CHF2", "Wild Cherry Flavor Art #DP657969 (C&K)"),
+    ("CHF3", "Cherry Flavor Art #33.8371 (Bell)"),
+    ("CI01", "Citric Acid USP Anhydrous"),
+    ("CI02", "Cimetidine Hydrochloride"),
+    ("CL02", "Clemastine Fumarate USP"),
+    ("CM3S", "Chlorpheniramine 3.8% Pink SR Beads"),
+    ("CM4S", "Chlorpheniramine 3.8% White SR Beads"),
+    ("CO01", "Corn Syrup 42/43 NF"),
+    ("CO03", "Codeine Phosphate USP"),
+    ("CPS1", "Chlor-Pseudo Mixture #1 SR Beads"),
+    ("DE01", "Dextromethorphan Hydrobromide USP"),
+    ("DE03", "Dexbrompheniramine Maleate USP"),
+    ("DI02", "Di-Pac Sugar NF"),
+    ("ED01", "EDTA Disodium"),
+    ("ER01", "Ergonovine Maleate USP"),
+    ("ET01", "Ethocel 10 Premium"),
+    ("EU03", "Eudragit NE 30 D"),
+    ("GL01", "Glycerin USP"),
+    ("GR03", "Grape Flavor Art #A1162800 (C&K)"),
+    ("GRF1", "Grape Flavor Spray Dried #F9866 (F&J)"),
+    ("GRLB", "Green Lake Blend"),
+    ("GU01", "Guaifenesin USP"),
+    ("HY01", "Hyoscyamine Sulfate USP"),
+    ("HY02", "Hydrocodone Bitartrate USP"),
+    ("HY03", "Hydrocortisone USP Micronized"),
+    ("IS01", "Isopropyl Alcohol USP"),
+    ("IS02", "Isometheptene Mucate USP"),
+    ("LA01", "Lactose Monohydrate NF #310 (Regular)"),
+    ("LA02", "Lactose Monohydrate NF #316 (Fast-Flo)"),
+    ("LLF1", "Lemon-Lime Blend #PFC8406 (F&J)"),
+    ("MA01", "Magnesium Stearate NF"),
+    ("MA02", "Mannitol USP Powder"),
+    ("MA06", "Magnesium Salicylate USP"),
+    ("MA07", "Mannitol USP Granular 2080"),
+    ("ME02", "Methyl Alcohol NF"),
+    ("ME04", "Menthol USP"),
+    ("ME05", "Methocel A4C Premium"),
+    ("ME07", "Methscopolamine Nitrate"),
+    ("ME08", "Methocel E4M Premium CR"),
+    ("ME09", "Methocel K4M Premium"),
+    ("MI02", "Microcrystalline Cellulose 102 NF"),
+    ("MP01", "Methylparaben NF"),
+    ("MT01", "Maltitol Solution NF"),
+    ("OP01", "Orange Pineapple Flavor Nat & Art #7531 (MM)"),
+    ("ORF2", "Orange Terpenless Blend #PFC9620 (F&J)"),
+    ("PG01", "Pharmaceutical Glaze NF 4 lb."),
+    ("PH01", "Phenylpropanolamine Hydrochloride USP"),
+    ("PH02", "Phenylephrine Hydrochloride USP Fine Powder"),
+    ("PH03", "Phenyltoloxamine Citrate"),
+    ("PH06", "Phenylephrine Hydrochloride USP"),
+    ("PH07", "Pheniramine Maleate USP"),
+    ("PH09", "Phentermine Hydrochloride USP"),
+    ("PMT1", "Peppermint Nat #113.10835"),
+    ("PN01", "Pineapple Flavor Art #7520 (MM)"),
+    ("PO01", "Polyethylene Glycol 400 NF"),
+    ("PO02", "Potassium Guaiacolsulfonate USP"),
+    ("PO03", "Polyethylene Glycol 300 NF"),
+    ("PO30", "Povidone K-30 USP"),
+    ("PP01", "Propylparaben NF"),
+    ("PR01", "Propylene Glycol USP"),
+    ("PR02", "Pramoxine Hydrochloride USP"),
+    ("PR03", "Propylene Glycol Diacetate NF"),
+    ("PS01", "Pseudoephedrine Hydrochloride USP Fine Powder"),
+    ("PS03", "Pseudoephedrine Hydrochloride USP"),
+    ("PS04", "Pseudoephedrine Sulfate USP"),
+    ("PX01", "Poloxamer 188 NF"),
+    ("PY01", "Pyrilamine Maleate USP"),
+    ("R30L", "D&C Red #30 Aluminum Lake"),
+    ("R40L", "FD&C Red #40 Aluminum Lake"),
+    ("RA01", "Raspberry Flavor Nat & Art #WL22286 (H&R)"),
+    ("RA02", "Raspberry Flavor Art #A1497600 (C&K)"),
+    ("RA03", "Black Raspberry Flavor #7715 (MM)"),
+    ("RB01", "Rootbeer Flavor #5517 (MM)"),
+    ("RE33", "D&C Red #33 Dye Powder"),
+    ("RE40", "FD&C Red #40 Dye Powder"),
+    ("RELB", "Red Lake Blend"),
+    ("RM01", "Rescon Mixture #1 (12-120) SR Beads"),
+    ("SA01", "Saccharin Sodium USP"),
+    ("SB01", "Strawberry Flavor Art #A1273400 (C&K)"),
+    ("SI01", "Colloidal Silicon Dioxide NF"),
+    ("SO01", "Sorbitol 70% USP"),
+    ("SO04", "Sodium Citrate USP Dihydrate"),
+    ("SO07", "Sodium Chloride FCC"),
+    ("SRM1", "SR Mixture (Sovereign)"),
+    ("SS20", "Sugar Spheres NF 20-25 Mesh"),
+    ("SS30", "Sugar Spheres NF 30-35 Mesh"),
+    ("SSR1", "Sugar Spheres NF Red 18-20 Mesh"),
+    ("ST01", "Starch (Corn)"),
+    ("ST02", "Sterotex"),
+    ("ST03", "Starch 1500 (Pregelatinized Corn)"),
+    ("ST04", "Stearic Acid NF"),
+    ("SU01", "Sugar NF"),
+    ("TA01", "Talc USP"),
+    ("TH01", "Thymol Crystals NF"),
+    ("TP01", "Tropical Fruit Punch Flavor Nat & Art #50432 (AFF)"),
+    ("TR01", "Trimethobenzamide Hydrochloride USP"),
+    ("VA01", "Vanillin NF"),
+    ("WA01", "Purified Water"),
+    ("Y10L", "D&C Yellow #10 Aluminum Lake"),
+    ("YE06", "FD&C Yellow #6 Dye Powder"),
+    ("YE10", "D&C Yellow #10 Dye Powder"),
+    ("YEL6", "FD&C Yellow #6 Aluminum Lake"),
+    ("YELB", "Yellow Lake Blend"),
+    ("YO01", "Yohimbine Hydrochloride"),
+]
+
+_API_CODES = {
+    "AC01", "AC03", "BR01", "BR02", "BU02", "CA02", "CA09", "CH01", "CH03", "CI02", "CL02",
+    "CO03", "DE01", "DE03", "ER01", "GU01", "HY01", "HY02", "HY03", "IS02", "MA06", "ME07",
+    "PH01", "PH02", "PH03", "PH06", "PH07", "PH09", "PO02", "PR02", "PS01", "PS03", "PS04",
+    "PY01", "TR01", "YO01",
+}
+_PRESERVATIVE_CODES = {"BE01", "BE02", "BU01", "CH02", "ED01", "MP01", "PP01", "SO04", "TH01"}
+_SOLVENT_CODES = {"AL01", "IS01", "ME02", "WA01", "GL01"}
+_LUBRICANT_CODES = {"CA01", "MA01", "SI01", "ST02", "ST04", "TA01"}
+_COATING_CODES = {"PG01", "PO01", "PO03", "PR01", "PR03", "EU03", "ET01"}
+_SWEETENER_CODES = {"CO01", "DI02", "MT01", "SA01", "SO01", "SU01", "SS20", "SS30", "SSR1"}
+_INTERMEDIATE_CODES = {"BPS2", "BPS3", "CM3S", "CM4S", "CPS1", "RM01", "SRM1"}
+
+
+def _classify_raw_material(code: str, name: str) -> str:
+    upper_name = name.upper()
+    if code in _API_CODES:
+        return "API"
+    if "FLAVOR" in upper_name or code == "BI01":
+        return "Flavor"
+    if "DYE" in upper_name or "LAKE" in upper_name or "COLOR" in upper_name:
+        return "Colorant"
+    if code in _PRESERVATIVE_CODES:
+        return "Preservative"
+    if code in _SOLVENT_CODES:
+        return "Solvent"
+    if code in _LUBRICANT_CODES:
+        return "Lubricant/Glidant"
+    if code in _COATING_CODES:
+        return "Coating Agent"
+    if code in _SWEETENER_CODES:
+        return "Sweetener"
+    if code in _INTERMEDIATE_CODES or "SR BEADS" in upper_name or "MIXTURE" in upper_name:
+        return "Intermediate"
+    return "Excipient"
+
+
+# Packaging components are not part of the FDA raw material list and are added separately
+# so a representative Packaging BOM can reference real primary/secondary pack items.
+PACKAGING_COMPONENTS = [
+    ("PKG-BTL-60HD", "60cc Round HDPE Bottle (White)", "Primary Container"),
+    ("PKG-CAP-38CR", "38mm Child-Resistant Closure Cap", "Closure"),
+    ("PKG-SEAL-38", "38mm Induction Heat Seal Liner", "Tamper-Evident Seal"),
+    ("PKG-DES-1G", "1g Silica Gel Desiccant Canister", "Desiccant"),
+    ("PKG-COT-COIL", "Rayon Coil Filler", "Void Filler"),
+    ("PKG-LBL-FRONT", "Pressure-Sensitive Label - Front Panel", "Label"),
+    ("PKG-PI-LEAF", "Package Insert / Patient Information Leaflet", "Literature"),
+    ("PKG-CTN-SHIP", "Corrugated Shipper Carton (12x8x6, 24-Bottle)", "Secondary Packaging"),
+]
+
+
 def seed_demo_content(db: Session) -> dict:
     if db.query(models.Supplier).count() > 0:
         return {"message": "Master data already seeded", "seeded": False}
@@ -104,9 +293,51 @@ def seed_demo_content(db: Session) -> dict:
     db.add_all([material1, material2])
     db.flush()
 
+    # Bulk-load the FDA raw material catalog (Reference/2025-07-10 FDA Raw Material List.pdf)
+    raw_materials_by_code = {}
+    for code, name in FDA_RAW_MATERIALS:
+        material = models.MaterialMaster(
+            material_code=code,
+            material_name=name,
+            material_type=_classify_raw_material(code, name),
+            category="FDA Raw Material Catalog",
+            uom="kg",
+            shelf_life_days=730,
+            storage_condition="Controlled Room",
+            status="Approved",
+            storage_location_id=storage1.id,
+            approved_by="Regulatory Affairs",
+            approved_on=datetime.utcnow(),
+        )
+        db.add(material)
+        raw_materials_by_code[code] = material
+
+    # Packaging components used to build the sample Packaging BOM below
+    packaging_by_code = {}
+    for code, name, function in PACKAGING_COMPONENTS:
+        component = models.MaterialMaster(
+            material_code=code,
+            material_name=name,
+            material_type="Packaging Component",
+            category=function,
+            uom="each",
+            shelf_life_days=1825,
+            storage_condition="Ambient",
+            status="Approved",
+            supplier_id=supplier3.id,
+            storage_location_id=storage1.id,
+            approved_by="Packaging Engineering",
+            approved_on=datetime.utcnow(),
+        )
+        db.add(component)
+        packaging_by_code[code] = component
+
+    db.flush()
+
     formulation = models.Formulation(
         formulation_code="MR-PCM-500ER",
         product_name="Paracetamol 500mg Extended Release",
+        bom_type="Manufacturing",
         dosage_form="Tablet",
         strength="500 mg",
         version="v2.1",
@@ -144,6 +375,88 @@ def seed_demo_content(db: Session) -> dict:
             is_critical=False,
         ),
     ])
+
+    # Sample Manufacturing BOM built entirely from the FDA raw material catalog
+    mfg_bom = models.Formulation(
+        formulation_code="MFG-BOM-ACM500",
+        product_name="Acetaminophen 500mg Tablets (Immediate Release)",
+        bom_type="Manufacturing",
+        dosage_form="Tablet",
+        strength="500 mg",
+        version="v1.0",
+        status="Approved",
+        batch_size_kg=100.0,
+        approved_by="Head of R&D",
+        approved_on=datetime.utcnow(),
+    )
+    db.add(mfg_bom)
+    db.flush()
+
+    mfg_bom_lines = [
+        ("AC01", 71.4, 0.5, True),
+        ("LA01", 14.3, 1.0, False),
+        ("MI02", 8.6, 1.0, False),
+        ("PO30", 3.0, 0.5, False),
+        ("ST03", 1.5, 0.5, False),
+        ("MA01", 0.7, 0.2, False),
+        ("SI01", 0.3, 0.2, False),
+        ("PG01", 0.2, 0.2, False),
+    ]
+    for code, pct, tolerance, is_critical in mfg_bom_lines:
+        raw = raw_materials_by_code[code]
+        db.add(models.FormulationIngredient(
+            formulation_id=mfg_bom.id,
+            material_id=raw.id,
+            material_code=raw.material_code,
+            material_name=raw.material_name,
+            material_type=raw.material_type,
+            required_quantity=round(pct / 100 * 100.0, 3),
+            uom="kg",
+            percentage_w_w=pct,
+            tolerance_pct=tolerance,
+            is_critical=is_critical,
+        ))
+
+    # Sample Packaging BOM for the same product, using dedicated packaging components
+    pkg_bom = models.Formulation(
+        formulation_code="PKG-BOM-ACM500-100CT",
+        product_name="Acetaminophen 500mg Tablets - 100 Count HDPE Bottle Pack",
+        bom_type="Packaging",
+        dosage_form="Tablet",
+        strength="500 mg",
+        version="v1.0",
+        status="Approved",
+        batch_size_kg=1.0,
+        approved_by="Packaging Engineering",
+        approved_on=datetime.utcnow(),
+    )
+    db.add(pkg_bom)
+    db.flush()
+
+    pkg_bom_lines = [
+        ("PKG-BTL-60HD", 1.0, False),
+        ("PKG-CAP-38CR", 1.0, True),
+        ("PKG-SEAL-38", 1.0, True),
+        ("PKG-DES-1G", 1.0, False),
+        ("PKG-COT-COIL", 1.0, False),
+        ("PKG-LBL-FRONT", 1.0, True),
+        ("PKG-PI-LEAF", 1.0, True),
+        ("PKG-CTN-SHIP", 0.0417, False),
+    ]
+    for code, qty_per_unit, is_critical in pkg_bom_lines:
+        pkg = packaging_by_code[code]
+        db.add(models.FormulationIngredient(
+            formulation_id=pkg_bom.id,
+            material_id=pkg.id,
+            material_code=pkg.material_code,
+            material_name=pkg.material_name,
+            material_type=pkg.material_type,
+            required_quantity=qty_per_unit,
+            uom="each",
+            percentage_w_w=0.0,
+            tolerance_pct=0.0,
+            is_critical=is_critical,
+        ))
 
     equipment = models.EquipmentMaster(
         equipment_code="PRESS-36STN",
@@ -302,6 +615,7 @@ class FormulationIngredientCreate(BaseModel):
 class FormulationCreate(BaseModel):
     formulation_code: str
     product_name: str
+    bom_type: str = "Manufacturing"
     dosage_form: str = "Tablet"
     strength: str = "500 mg"
     version: str = "v1.0"
@@ -546,6 +860,7 @@ def create_formulation(item: FormulationCreate, db: Session = Depends(get_db)):
     formulation = models.Formulation(
         formulation_code=item.formulation_code,
         product_name=item.product_name,
+        bom_type=item.bom_type,
         dosage_form=item.dosage_form,
         strength=item.strength,
         version=item.version,

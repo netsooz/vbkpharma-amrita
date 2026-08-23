@@ -16,6 +16,7 @@ const mapFormulationToRecipe = (r: FormulationMaster): MasterRecipe => ({
   id: r.id,
   recipeCode: r.formulation_code,
   productName: r.product_name,
+  bomType: r.bom_type || 'Manufacturing',
   dosageForm: r.dosage_form,
   strength: r.strength,
   version: r.version,
@@ -27,8 +28,10 @@ const mapFormulationToRecipe = (r: FormulationMaster): MasterRecipe => ({
     materialName: ing.material_name,
     type: ing.material_type as any,
     percentageWw: ing.percentage_w_w,
+    requiredQuantity: ing.required_quantity,
     standardUom: ing.uom,
     tolerancePct: ing.tolerance_pct,
+    isCritical: ing.is_critical,
   })),
   stageParameters: [],
   approvedBy: r.approved_by,
@@ -49,10 +52,10 @@ const mapEquipment = (eq: any): EquipmentItem => ({
   lastLineClearanceBatch: eq.last_line_clearance_batch || '',
 });
 
-type MasterDataTab = 'formulations' | 'materials' | 'suppliers' | 'manufacturers' | 'locations' | 'equipment';
+type MasterDataTab = 'manufacturing-bom' | 'packaging-bom' | 'materials' | 'suppliers' | 'manufacturers' | 'locations' | 'equipment';
 
 export const MasterDataDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<MasterDataTab>('formulations');
+  const [activeTab, setActiveTab] = useState<MasterDataTab>('manufacturing-bom');
   const [recipes, setRecipes] = useState<MasterRecipe[]>(INITIAL_RECIPES);
   const [equipmentList, setEquipmentList] = useState<EquipmentItem[]>(INITIAL_EQUIPMENT);
   const [masterData, setMasterData] = useState<MasterDataPayload | null>(null);
@@ -113,154 +116,118 @@ export const MasterDataDashboard: React.FC = () => {
     ? selectedRecipe.ingredients.reduce((sum, ing) => sum + ing.percentageWw, 0)
     : 0;
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">
-      <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Master Data Management (MDM)</h1>
-          <p className="text-xs text-slate-500">
-            Formulation Master Recipes (eBOM), 10-Step CPP Rules & Equipment Calibration Registry
-          </p>
-        </div>
+  const manufacturingBoms = recipes.filter(r => r.bomType !== 'Packaging');
+  const packagingBoms = recipes.filter(r => r.bomType === 'Packaging');
+  const isPackagingBomSelected = selectedRecipe?.bomType === 'Packaging';
 
-        <div className="flex flex-wrap bg-white p-1 rounded-lg border border-slate-300 shadow-sm gap-1">
-          {([
-            { key: 'formulations', label: '🧪 Formulation Master Recipes (eBOM)' },
-            { key: 'materials', label: '📦 Material Master' },
-            { key: 'suppliers', label: '🚚 Supplier Master' },
-            { key: 'manufacturers', label: '🏷️ Manufacturer Master' },
-            { key: 'locations', label: '📍 Storage Locations' },
-            { key: 'equipment', label: '🏭 Equipment Master & Calibration' },
-          ] as { key: MasterDataTab; label: string }[]).map(tab => (
+  const switchBomTab = (tab: 'manufacturing-bom' | 'packaging-bom') => {
+    setActiveTab(tab);
+    const list = tab === 'packaging-bom' ? packagingBoms : manufacturingBoms;
+    setSelectedRecipe(list[0] || null);
+  };
+
+  const renderBomTab = (bomType: 'Manufacturing' | 'Packaging') => {
+    const list = bomType === 'Packaging' ? packagingBoms : manufacturingBoms;
+    const emptyLabel = bomType === 'Packaging'
+      ? 'No packaging BOMs available. Seed master data to load an example primary/secondary pack list.'
+      : 'No manufacturing BOMs available. Seed master data to load an example formulation.';
+
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+          <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+              {bomType === 'Packaging' ? 'Packaging BOMs' : 'Manufacturing BOMs'}
+            </h2>
             <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition ${
-                activeTab === tab.key ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-              }`}
+              onClick={async () => {
+                try {
+                  await api.seedMasterData();
+                  await loadMasterData();
+                } catch (err) {
+                  alert('Unable to seed master data. Check backend connection.');
+                }
+              }}
+              className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-xs font-semibold"
             >
-              {tab.label}
+              + Seed Pharma Master Data
             </button>
-          ))}
-        </div>
-      </div>
-
-      {loading && (
-        <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          Loading master data from the live pharma database...
-        </div>
-      )}
-
-      {masterData && !loading && (
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <p className="text-xs uppercase tracking-wider text-slate-400">Materials</p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">{masterData.materials?.length || 0}</p>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <p className="text-xs uppercase tracking-wider text-slate-400">Suppliers</p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">{masterData.suppliers?.length || 0}</p>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <p className="text-xs uppercase tracking-wider text-slate-400">Formulations</p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">{masterData.formulations?.length || 0}</p>
-          </div>
-        </div>
-      )}
 
-      {activeTab === 'formulations' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Master Formulations</h2>
-              <button
-                onClick={async () => {
-                  try {
-                    await api.seedMasterData();
-                    await loadMasterData();
-                  } catch (err) {
-                    alert('Unable to seed master data. Check backend connection.');
-                  }
-                }}
-                className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-xs font-semibold"
-              >
-                + Seed Pharma Master Data
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {recipes.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-                  No formulations available. Seed master data to load example pharma recipes.
+          <div className="space-y-2">
+            {list.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                {emptyLabel}
+              </div>
+            ) : (
+              list.map(r => (
+                <div
+                  key={r.id}
+                  onClick={() => setSelectedRecipe(r)}
+                  className={`p-3 rounded-lg border cursor-pointer transition ${
+                    selectedRecipe?.id === r.id
+                      ? 'border-blue-600 bg-blue-50/50 shadow-sm'
+                      : 'border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <span className="font-mono text-xs font-bold text-blue-700">{r.recipeCode}</span>
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        r.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {r.status}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-900 mt-1">{r.productName}</h3>
+                  <div className="text-xs text-slate-500 mt-1 flex justify-between">
+                    <span>Strength: {r.strength}</span>
+                    <span>Version: {r.version}</span>
+                  </div>
                 </div>
-              ) : (
-                recipes.map(r => (
-                  <div
-                    key={r.id}
-                    onClick={() => setSelectedRecipe(r)}
-                    className={`p-3 rounded-lg border cursor-pointer transition ${
-                      selectedRecipe?.id === r.id
-                        ? 'border-blue-600 bg-blue-50/50 shadow-sm'
-                        : 'border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <span className="font-mono text-xs font-bold text-blue-700">{r.recipeCode}</span>
-                      <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                          r.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {r.status}
-                      </span>
-                    </div>
-                    <h3 className="text-sm font-bold text-slate-900 mt-1">{r.productName}</h3>
-                    <div className="text-xs text-slate-500 mt-1 flex justify-between">
-                      <span>Strength: {r.strength}</span>
-                      <span>Version: {r.version}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+              ))
+            )}
           </div>
+        </div>
 
-          <div className="lg:col-span-2 space-y-6">
-            {selectedRecipe && (
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-bold text-slate-900">{selectedRecipe.productName}</h2>
-                      <span className="text-xs px-2 py-0.5 bg-slate-100 font-mono text-slate-700 rounded">
-                        {selectedRecipe.recipeCode} ({selectedRecipe.version})
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Dosage: <strong>{selectedRecipe.dosageForm} ({selectedRecipe.strength})</strong> | Status:{' '}
-                      <strong className={selectedRecipe.status === 'Approved' ? 'text-emerald-700' : 'text-amber-700'}>
-                        {selectedRecipe.status}
-                      </strong>
-                    </p>
-                  </div>
-
+        <div className="lg:col-span-2 space-y-6">
+          {selectedRecipe && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+                <div>
                   <div className="flex items-center gap-2">
-                    {selectedRecipe.status === 'Draft' ? (
-                      <button
-                        onClick={() => handleApproveRecipeTrigger(selectedRecipe)}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow-sm"
-                      >
-                        ✍️ 21 CFR Approve Recipe
-                      </button>
-                    ) : (
-                      <div className="text-right text-[11px] text-slate-500">
-                        <div>Approved By: <strong className="text-slate-800">{selectedRecipe.approvedBy}</strong></div>
-                        <div>Date: {selectedRecipe.approvalDate}</div>
-                      </div>
-                    )}
+                    <h2 className="text-lg font-bold text-slate-900">{selectedRecipe.productName}</h2>
+                    <span className="text-xs px-2 py-0.5 bg-slate-100 font-mono text-slate-700 rounded">
+                      {selectedRecipe.recipeCode} ({selectedRecipe.version})
+                    </span>
                   </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Dosage: <strong>{selectedRecipe.dosageForm} ({selectedRecipe.strength})</strong> | Status:{' '}
+                    <strong className={selectedRecipe.status === 'Approved' ? 'text-emerald-700' : 'text-amber-700'}>
+                      {selectedRecipe.status}
+                    </strong>
+                  </p>
                 </div>
 
+                <div className="flex items-center gap-2">
+                  {selectedRecipe.status === 'Draft' ? (
+                    <button
+                      onClick={() => handleApproveRecipeTrigger(selectedRecipe)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow-sm"
+                    >
+                      ✍️ 21 CFR Approve Recipe
+                    </button>
+                  ) : (
+                    <div className="text-right text-[11px] text-slate-500">
+                      <div>Approved By: <strong className="text-slate-800">{selectedRecipe.approvedBy}</strong></div>
+                      <div>Date: {selectedRecipe.approvalDate}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {!isPackagingBomSelected && (
                 <div className="my-4 p-3.5 bg-slate-50 rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase">
@@ -279,12 +246,14 @@ export const MasterDataDashboard: React.FC = () => {
                     <span className="text-xs font-semibold text-slate-600">kg Batch</span>
                   </div>
                 </div>
+              )}
 
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                      Electronic Bill of Materials (eBOM) Formula
-                    </h3>
+              <div className={isPackagingBomSelected ? 'mt-4' : ''}>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    {isPackagingBomSelected ? 'Packaging Bill of Materials (pBOM)' : 'Electronic Bill of Materials (eBOM) Formula'}
+                  </h3>
+                  {!isPackagingBomSelected && (
                     <span
                       className={`text-xs font-bold font-mono ${
                         totalPercentage === 100 ? 'text-emerald-700' : 'text-rose-600'
@@ -292,9 +261,40 @@ export const MasterDataDashboard: React.FC = () => {
                     >
                       Formula Total: {totalPercentage.toFixed(1)}% {totalPercentage === 100 ? '✓ Balanced' : '⚠️ Must equal 100%'}
                     </span>
-                  </div>
+                  )}
+                </div>
 
-                  <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                  {isPackagingBomSelected ? (
+                    <table className="w-full text-left text-xs text-slate-700">
+                      <thead className="bg-slate-100 uppercase font-semibold text-slate-700 border-b border-slate-200">
+                        <tr>
+                          <th className="p-2.5">Component Code</th>
+                          <th className="p-2.5">Component Name</th>
+                          <th className="p-2.5">Function</th>
+                          <th className="p-2.5 text-right">Qty per Pack</th>
+                          <th className="p-2.5">Critical Component</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedRecipe.ingredients.map(ing => (
+                          <tr key={ing.id} className="hover:bg-slate-50">
+                            <td className="p-2.5 font-mono text-blue-700">{ing.materialCode}</td>
+                            <td className="p-2.5 font-semibold text-slate-900">{ing.materialName}</td>
+                            <td className="p-2.5">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-700 font-medium">
+                                {ing.type}
+                              </span>
+                            </td>
+                            <td className="p-2.5 text-right font-mono font-bold text-blue-700">
+                              {ing.requiredQuantity} {ing.standardUom}
+                            </td>
+                            <td className="p-2.5 text-slate-500">{ing.isCritical ? 'Yes' : 'No'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
                     <table className="w-full text-left text-xs text-slate-700">
                       <thead className="bg-slate-100 uppercase font-semibold text-slate-700 border-b border-slate-200">
                         <tr>
@@ -328,13 +328,82 @@ export const MasterDataDashboard: React.FC = () => {
                         })}
                       </tbody>
                     </table>
-                  </div>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">
+      <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Master Data Management (MDM)</h1>
+          <p className="text-xs text-slate-500">
+            Manufacturing &amp; Packaging BOMs, Material/Supplier/Equipment Masters &amp; 21 CFR Part 11 Approval Records
+          </p>
+        </div>
+
+        <div className="flex flex-wrap bg-white p-1 rounded-lg border border-slate-300 shadow-sm gap-1">
+          {([
+            { key: 'manufacturing-bom', label: '🧪 Manufacturing BOM (eBOM)' },
+            { key: 'packaging-bom', label: '📦 Packaging BOM (pBOM)' },
+            { key: 'materials', label: '🧱 Material Master' },
+            { key: 'suppliers', label: '🚚 Supplier Master' },
+            { key: 'manufacturers', label: '🏷️ Manufacturer Master' },
+            { key: 'locations', label: '📍 Storage Locations' },
+            { key: 'equipment', label: '🏭 Equipment Master & Calibration' },
+          ] as { key: MasterDataTab; label: string }[]).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() =>
+                tab.key === 'manufacturing-bom' || tab.key === 'packaging-bom'
+                  ? switchBomTab(tab.key)
+                  : setActiveTab(tab.key)
+              }
+              className={`px-4 py-1.5 text-xs font-semibold rounded-md transition ${
+                activeTab === tab.key ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading && (
+        <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Loading master data from the live pharma database...
+        </div>
+      )}
+
+      {masterData && !loading && (
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs uppercase tracking-wider text-slate-400">Materials</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{masterData.materials?.length || 0}</p>
+          </div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs uppercase tracking-wider text-slate-400">Suppliers</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{masterData.suppliers?.length || 0}</p>
+          </div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs uppercase tracking-wider text-slate-400">Manufacturing BOMs</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{manufacturingBoms.length}</p>
+          </div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs uppercase tracking-wider text-slate-400">Packaging BOMs</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">{packagingBoms.length}</p>
           </div>
         </div>
       )}
+
+      {activeTab === 'manufacturing-bom' && renderBomTab('Manufacturing')}
+      {activeTab === 'packaging-bom' && renderBomTab('Packaging')}
 
       {activeTab === 'materials' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

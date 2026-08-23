@@ -107,6 +107,7 @@ class Formulation(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     formulation_code = Column(String(50), unique=True, index=True, nullable=False)
     product_name = Column(String(200), nullable=False)
+    bom_type = Column(String(20), default="Manufacturing")
     dosage_form = Column(String(50), default="Tablet")
     strength = Column(String(100), nullable=True)
     version = Column(String(20), default="v1.0")

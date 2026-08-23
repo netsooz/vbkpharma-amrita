@@ -6,8 +6,10 @@ export interface RecipeIngredient {
   materialName: string;
   type: MaterialType;
   percentageWw: number;
+  requiredQuantity: number;
   standardUom: string;
   tolerancePct: number;
+  isCritical: boolean;
 }
 
 export interface StageParameterSpec {
@@ -27,6 +29,7 @@ export interface MasterRecipe {
   id: string;
   recipeCode: string;
   productName: string;
+  bomType: string;
   dosageForm: string;
   strength: string;
   version: string;
@@ -116,6 +119,7 @@ export interface FormulationMaster {
   id: string;
   formulation_code: string;
   product_name: string;
+  bom_type: string;
   dosage_form: string;
   strength: string;
   version: string;

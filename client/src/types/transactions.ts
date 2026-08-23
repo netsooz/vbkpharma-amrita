@@ -65,4 +65,6 @@ export interface StockTransactionCreatePayload {
   performed_by: string;
   signature_meaning?: string;
   scanned_value?: string;
+  expiry_date?: string;
+  supplier_lot?: string;
 }

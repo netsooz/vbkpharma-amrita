@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import type { EquipmentItem, MasterDataPayload } from '../types/masterData';
 import { api } from '../services/api';
+import { AddMasterRecordModal } from '../components/AddMasterRecordModal';
+import type { MasterFieldConfig } from '../components/AddMasterRecordModal';
+import { AddSpecificationModal } from '../components/AddSpecificationModal';
 
 const INITIAL_EQUIPMENT: EquipmentItem[] = [];
 
@@ -25,6 +28,8 @@ export const MasterDataDashboard: React.FC = () => {
   const [equipmentList, setEquipmentList] = useState<EquipmentItem[]>(INITIAL_EQUIPMENT);
   const [masterData, setMasterData] = useState<MasterDataPayload | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSpecModalOpen, setIsSpecModalOpen] = useState(false);
 
   const loadMasterData = async () => {
     try {
@@ -46,6 +51,120 @@ export const MasterDataDashboard: React.FC = () => {
     loadMasterData();
   }, []);
 
+  const addConfigs: Partial<Record<MasterDataTab, { title: string; description?: string; fields: MasterFieldConfig[]; onSave: (payload: any) => Promise<void> }>> = {
+    materials: {
+      title: 'Add Material',
+      description: 'Register a new raw material or packaging component in the Material Master.',
+      fields: [
+        { name: 'material_code', label: 'Material Code', type: 'text', required: true, placeholder: 'e.g. API-XYZ-01' },
+        { name: 'material_name', label: 'Material Name', type: 'text', required: true },
+        { name: 'material_type', label: 'Material Type', type: 'select', defaultValue: 'API', options: ['API', 'Excipient', 'Flavor', 'Colorant', 'Preservative', 'Solvent', 'Lubricant/Glidant', 'Coating Agent', 'Sweetener', 'Intermediate', 'Packaging Component'] },
+        { name: 'category', label: 'Category', type: 'text' },
+        { name: 'grade', label: 'Grade', type: 'text' },
+        { name: 'strength', label: 'Strength', type: 'text' },
+        { name: 'uom', label: 'UOM', type: 'text', defaultValue: 'kg' },
+        { name: 'shelf_life_days', label: 'Shelf Life (days)', type: 'number', defaultValue: 365 },
+        { name: 'storage_condition', label: 'Storage Condition', type: 'text', defaultValue: 'Controlled Room' },
+        { name: 'status', label: 'Status', type: 'select', defaultValue: 'Approved', options: ['Approved', 'Under Qualification', 'Rejected'] },
+        { name: 'approved_by', label: 'Approved By', type: 'text' },
+      ],
+      onSave: async payload => { await api.createMaterial(payload); await loadMasterData(); },
+    },
+    suppliers: {
+      title: 'Add Supplier',
+      fields: [
+        { name: 'supplier_code', label: 'Supplier Code', type: 'text', required: true },
+        { name: 'supplier_name', label: 'Supplier Name', type: 'text', required: true },
+        { name: 'supplier_type', label: 'Supplier Type', type: 'select', defaultValue: 'Raw Material', options: ['API', 'Excipient', 'Packaging', 'Raw Material'] },
+        { name: 'contact_person', label: 'Contact Person', type: 'text' },
+        { name: 'phone', label: 'Phone', type: 'text' },
+        { name: 'email', label: 'Email', type: 'text' },
+        { name: 'address', label: 'Address', type: 'text' },
+        { name: 'qualification_status', label: 'Qualification Status', type: 'select', defaultValue: 'Approved', options: ['Approved', 'Under Qualification', 'Disqualified'] },
+      ],
+      onSave: async payload => { await api.createSupplier(payload); await loadMasterData(); },
+    },
+    manufacturers: {
+      title: 'Add Manufacturer',
+      fields: [
+        { name: 'manufacturer_code', label: 'Manufacturer Code', type: 'text', required: true },
+        { name: 'manufacturer_name', label: 'Manufacturer Name', type: 'text', required: true },
+        { name: 'site_location', label: 'Site Location', type: 'text' },
+        { name: 'license_number', label: 'License Number', type: 'text' },
+        { name: 'gmp_status', label: 'GMP Status', type: 'select', defaultValue: 'Approved', options: ['Approved', 'Under Audit', 'Suspended'] },
+      ],
+      onSave: async payload => { await api.createManufacturer(payload); await loadMasterData(); },
+    },
+    locations: {
+      title: 'Add Storage Location',
+      fields: [
+        { name: 'location_code', label: 'Location Code', type: 'text', required: true },
+        { name: 'location_name', label: 'Location Name', type: 'text', required: true },
+        { name: 'area_type', label: 'Area Type', type: 'select', defaultValue: 'Warehouse', options: ['Warehouse', 'QC Hold', 'Production', 'Cold Storage'] },
+        { name: 'room_condition', label: 'Room Condition', type: 'text', defaultValue: 'Controlled' },
+        { name: 'is_quarantine', label: 'Quarantine Zone', type: 'checkbox' },
+      ],
+      onSave: async payload => { await api.createStorageLocation(payload); await loadMasterData(); },
+    },
+    equipment: {
+      title: 'Register New Equipment',
+      fields: [
+        { name: 'equipment_code', label: 'Equipment Code', type: 'text', required: true },
+        { name: 'equipment_name', label: 'Equipment Name', type: 'text', required: true },
+        { name: 'category', label: 'Category', type: 'select', defaultValue: 'Tablet Press', options: ['Dispensing Scale', 'Granulator', 'Fluid Bed Dryer', 'Mill', 'Sifter', 'Blender', 'Tablet Press', 'Coater', 'Packer'] },
+        { name: 'model_number', label: 'Model Number', type: 'text' },
+        { name: 'manufacturer', label: 'Manufacturer', type: 'text' },
+        { name: 'room_location', label: 'Room Location', type: 'text' },
+        { name: 'calibration_date', label: 'Calibration Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+        { name: 'calibration_due_date', label: 'Calibration Due Date', type: 'text', placeholder: 'YYYY-MM-DD' },
+        { name: 'status', label: 'Status', type: 'select', defaultValue: 'Qualified & Available', options: ['Qualified & Available', 'Calibration Due', 'Under Maintenance', 'Quarantined'] },
+        { name: 'last_line_clearance_batch', label: 'Last Line Clearance Batch', type: 'text' },
+      ],
+      onSave: async payload => { await api.createEquipment(payload); await loadMasterData(); },
+    },
+    uom: {
+      title: 'Add Unit of Measure',
+      fields: [
+        { name: 'uom_code', label: 'UOM Code', type: 'text', required: true, placeholder: 'e.g. LB' },
+        { name: 'uom_name', label: 'UOM Name', type: 'text', required: true },
+        { name: 'uom_category', label: 'Category', type: 'select', defaultValue: 'Weight', options: ['Weight', 'Volume', 'Count', 'Length'] },
+        { name: 'base_uom_code', label: 'Base UOM Code', type: 'text', placeholder: 'e.g. KG (optional)' },
+        { name: 'conversion_factor', label: 'Conversion Factor', type: 'number', defaultValue: 1 },
+        { name: 'status', label: 'Status', type: 'select', defaultValue: 'Active', options: ['Active', 'Inactive'] },
+      ],
+      onSave: async payload => { await api.createUom(payload); await loadMasterData(); },
+    },
+    customers: {
+      title: 'Add Customer',
+      fields: [
+        { name: 'customer_code', label: 'Customer Code', type: 'text', required: true },
+        { name: 'customer_name', label: 'Customer Name', type: 'text', required: true },
+        { name: 'customer_type', label: 'Customer Type', type: 'select', defaultValue: 'Distributor', options: ['Distributor', 'Institutional', 'Pharmacy', 'Export'] },
+        { name: 'gstin', label: 'GSTIN', type: 'text' },
+        { name: 'contact_person', label: 'Contact Person', type: 'text' },
+        { name: 'phone', label: 'Phone', type: 'text' },
+        { name: 'email', label: 'Email', type: 'text' },
+        { name: 'address', label: 'Address', type: 'text' },
+        { name: 'credit_limit', label: 'Credit Limit', type: 'number', defaultValue: 0 },
+        { name: 'status', label: 'Status', type: 'select', defaultValue: 'Active', options: ['Active', 'On Hold', 'Blacklisted'] },
+      ],
+      onSave: async payload => { await api.createCustomer(payload); await loadMasterData(); },
+    },
+    'tax-codes': {
+      title: 'Add Tax / HSN Code',
+      fields: [
+        { name: 'hsn_code', label: 'HSN Code', type: 'text', required: true },
+        { name: 'description', label: 'Description', type: 'text', required: true },
+        { name: 'tax_percentage', label: 'Tax %', type: 'number', defaultValue: 0 },
+        { name: 'tax_type', label: 'Tax Type', type: 'select', defaultValue: 'GST', options: ['GST', 'VAT', 'Sales Tax'] },
+        { name: 'status', label: 'Status', type: 'select', defaultValue: 'Active', options: ['Active', 'Inactive'] },
+      ],
+      onSave: async payload => { await api.createTaxCode(payload); await loadMasterData(); },
+    },
+  };
+
+  const activeAddConfig = addConfigs[activeTab];
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">
       <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -57,6 +176,14 @@ export const MasterDataDashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {(activeAddConfig || activeTab === 'specifications') && (
+            <button
+              onClick={() => (activeTab === 'specifications' ? setIsSpecModalOpen(true) : setIsAddModalOpen(true))}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold whitespace-nowrap shadow-sm"
+            >
+              + Add {activeTab === 'specifications' ? 'Specification' : activeAddConfig?.title.replace(/^Add |^Register /, '')}
+            </button>
+          )}
           <button
             onClick={async () => {
               try {
@@ -343,7 +470,7 @@ export const MasterDataDashboard: React.FC = () => {
               </p>
             </div>
             <button
-              onClick={() => alert('Add Equipment modal will open.')}
+              onClick={() => setIsAddModalOpen(true)}
               className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded shadow-sm self-start sm:self-auto"
             >
               + Register New Machine
@@ -603,6 +730,23 @@ export const MasterDataDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {activeAddConfig && (
+        <AddMasterRecordModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          onSave={activeAddConfig.onSave}
+          title={activeAddConfig.title}
+          description={activeAddConfig.description}
+          fields={activeAddConfig.fields}
+        />
+      )}
+
+      <AddSpecificationModal
+        isOpen={isSpecModalOpen}
+        onClose={() => setIsSpecModalOpen(false)}
+        onSave={async payload => { await api.createSpecification(payload); await loadMasterData(); }}
+      />
     </div>
   );
 };

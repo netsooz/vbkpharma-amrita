@@ -855,6 +855,8 @@ class StockTransactionCreate(BaseModel):
     performed_by: str
     signature_meaning: Optional[str] = None
     scanned_value: Optional[str] = None
+    expiry_date: Optional[str] = None
+    supplier_lot: Optional[str] = None
 
 
 @app.get("/")
@@ -898,6 +900,26 @@ def create_goods_inward(item: InventoryItemCreate, db: Session = Depends(get_db)
         details_json={"quantity": item.quantity, "uom": item.uom}
     )
     db.add(audit)
+
+    txn_count = db.query(models.StockTransaction).filter(models.StockTransaction.transaction_type == "GOODS_INWARD").count()
+    transaction = models.StockTransaction(
+        transaction_code=f"GRN-{txn_count + 1:04d}",
+        transaction_type="GOODS_INWARD",
+        material_code=item.material_code,
+        material_name=item.material_name,
+        lot_number=item.lot_number,
+        quantity=item.quantity,
+        uom=item.uom,
+        to_location=item.storage_location,
+        related_party=item.supplier,
+        reference_doc=item.supplier_lot,
+        reason="Goods receipt via Raw Materials & Quarantine intake form",
+        performed_by="Warehouse Receiving",
+        signature_meaning="Goods Receipt Authorization",
+        status="Completed",
+    )
+    db.add(transaction)
+
     db.commit()
     db.refresh(new_lot)
     return new_lot
@@ -1309,12 +1331,13 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
     lot = None
     if item.lot_number:
         lot = db.query(models.InventoryLot).filter(models.InventoryLot.lot_number == item.lot_number).first()
-        if not lot:
+        if not lot and txn_type != "GOODS_INWARD":
             raise HTTPException(status_code=404, detail=f"Lot {item.lot_number} not found")
 
     txn_status = "Completed"
     reference_doc = item.reference_doc
     reason = item.reason
+    new_lot_number = item.lot_number
 
     if txn_type == "BARCODE_GENERATION":
         generated_barcode = f"BC-{lot.material_code}-{lot.lot_number}-{uuid.uuid4().hex[:6].upper()}"
@@ -1331,6 +1354,32 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
             txn_status = "Failed"
             reason = reason or "Scanned barcode does not match lot record"
         reference_doc = item.scanned_value
+    elif txn_type == "GOODS_INWARD" and not lot:
+        # First-time receipt: no existing lot to top up, so create a new quarantined lot.
+        if not item.expiry_date:
+            raise HTTPException(status_code=400, detail="Expiry date is required when receiving a new lot")
+        new_lot_number = item.lot_number or f"LOT-{datetime.utcnow().strftime('%y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+        lot = models.InventoryLot(
+            lot_number=new_lot_number,
+            material_code=item.material_code,
+            material_name=item.material_name,
+            material_type=(
+                db.query(models.MaterialMaster.material_type)
+                .filter(models.MaterialMaster.material_code == item.material_code)
+                .scalar()
+                or "API"
+            ),
+            supplier=item.related_party or "Unknown Supplier",
+            supplier_lot=item.supplier_lot or "",
+            quantity=item.quantity,
+            uom=item.uom,
+            storage_location=item.to_location or "WH-01",
+            expiry_date=item.expiry_date,
+            status="Quarantine",
+        )
+        db.add(lot)
+        db.flush()
+        reason = reason or "New lot received and placed in quarantine"
     elif lot:
         if txn_type in _QUANTITY_REDUCING_TYPES:
             if lot.quantity < item.quantity:
@@ -1355,7 +1404,7 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
         transaction_type=txn_type,
         material_code=item.material_code,
         material_name=item.material_name,
-        lot_number=item.lot_number,
+        lot_number=new_lot_number,
         quantity=item.quantity,
         uom=item.uom,
         from_location=item.from_location,
@@ -1379,7 +1428,7 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
             "material_code": item.material_code,
             "quantity": item.quantity,
             "uom": item.uom,
-            "lot_number": item.lot_number,
+            "lot_number": new_lot_number,
             "from_location": item.from_location,
             "to_location": item.to_location,
             "status": txn_status,

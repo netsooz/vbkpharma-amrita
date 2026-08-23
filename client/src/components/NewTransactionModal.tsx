@@ -16,7 +16,7 @@ interface NewTransactionModalProps {
   defaultType?: TransactionType;
 }
 
-const LOCATION_REQUIRED_TYPES: TransactionType[] = ['MATERIAL_ISSUE', 'MATERIAL_RETURN', 'STOCK_TRANSFER'];
+const LOCATION_REQUIRED_TYPES: TransactionType[] = ['GOODS_INWARD', 'MATERIAL_ISSUE', 'MATERIAL_RETURN', 'STOCK_TRANSFER'];
 const PARTY_LABELS: Partial<Record<TransactionType, string>> = {
   GOODS_INWARD: 'Supplier',
   GOODS_RETURN_SUPPLIER: 'Supplier',
@@ -25,7 +25,7 @@ const PARTY_LABELS: Partial<Record<TransactionType, string>> = {
 };
 
 export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen, onClose, onSave, defaultType }) => {
-  const [transactionType, setTransactionType] = useState<TransactionType>(defaultType || 'MATERIAL_ISSUE');
+  const [transactionType, setTransactionType] = useState<TransactionType>(defaultType || 'GOODS_INWARD');
   const [materials, setMaterials] = useState<MaterialOption[]>([]);
   const [materialCode, setMaterialCode] = useState('');
   const [lotNumber, setLotNumber] = useState('');
@@ -38,6 +38,8 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
   const [reason, setReason] = useState('');
   const [performedBy, setPerformedBy] = useState('');
   const [scannedValue, setScannedValue] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [supplierLot, setSupplierLot] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -53,6 +55,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
   const meta = TRANSACTION_TYPES.find(t => t.type === transactionType)!;
   const isBarcodeType = transactionType === 'BARCODE_GENERATION' || transactionType === 'BARCODE_VALIDATION';
   const needsLocations = !isBarcodeType && (LOCATION_REQUIRED_TYPES.includes(transactionType) || transactionType === 'STOCK_TRANSFER');
+  const isNewLotGoodsInward = transactionType === 'GOODS_INWARD' && !lotNumber.trim();
   const selectedMaterial = materials.find(m => m.material_code === materialCode);
 
   const resetForm = () => {
@@ -66,6 +69,8 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
     setReason('');
     setPerformedBy('');
     setScannedValue('');
+    setExpiryDate('');
+    setSupplierLot('');
     setError('');
   };
 
@@ -87,6 +92,10 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
       setError('Quantity is required for this transaction type.');
       return;
     }
+    if (isNewLotGoodsInward && !expiryDate.trim()) {
+      setError('Expiry date is required when receiving a new lot (no existing Lot Number entered).');
+      return;
+    }
 
     setSaving(true);
     setError('');
@@ -105,6 +114,8 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
         reason: reason.trim() || undefined,
         performed_by: performedBy.trim(),
         scanned_value: scannedValue.trim() || undefined,
+        expiry_date: expiryDate.trim() || undefined,
+        supplier_lot: supplierLot.trim() || undefined,
       });
       resetForm();
       onClose();
@@ -165,7 +176,9 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Lot Number {isBarcodeType ? '' : '(optional)'}</label>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+              Lot Number {isBarcodeType ? '' : '(optional)'}
+            </label>
             <input
               type="text"
               required={isBarcodeType}
@@ -174,7 +187,37 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
               placeholder="e.g. LOT-INV-001"
               className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600"
             />
+            {transactionType === 'GOODS_INWARD' && (
+              <p className="mt-1 text-[11px] text-slate-500">
+                Leave blank to receive this as a brand-new lot (a lot number will be auto-generated).
+              </p>
+            )}
           </div>
+
+          {isNewLotGoodsInward && (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Expiry Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Supplier Lot Number</label>
+                <input
+                  type="text"
+                  value={supplierLot}
+                  onChange={(e) => setSupplierLot(e.target.value)}
+                  placeholder="e.g. SUP-LOT-2001"
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+            </>
+          )}
 
           {isBarcodeType ? (
             transactionType === 'BARCODE_VALIDATION' && (

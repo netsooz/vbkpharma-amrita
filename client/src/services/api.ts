@@ -1,5 +1,18 @@
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api';
 
+async function postJson(url: string, payload: any, errorMessage: string) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail || errorMessage);
+  }
+  return res.json();
+}
+
 export const api = {
   async getInventory() {
     const res = await fetch(`${API_BASE}/inventory`);
@@ -92,5 +105,41 @@ export const api = {
     const res = await fetch(`${API_BASE}/materials`);
     if (!res.ok) throw new Error('Failed to fetch materials');
     return res.json();
+  },
+
+  async createMaterial(payload: any) {
+    return postJson(`${API_BASE}/materials`, payload, 'Failed to create material');
+  },
+
+  async createSupplier(payload: any) {
+    return postJson(`${API_BASE}/suppliers`, payload, 'Failed to create supplier');
+  },
+
+  async createManufacturer(payload: any) {
+    return postJson(`${API_BASE}/manufacturers`, payload, 'Failed to create manufacturer');
+  },
+
+  async createStorageLocation(payload: any) {
+    return postJson(`${API_BASE}/storage-locations`, payload, 'Failed to create storage location');
+  },
+
+  async createEquipment(payload: any) {
+    return postJson(`${API_BASE}/equipment`, payload, 'Failed to create equipment');
+  },
+
+  async createUom(payload: any) {
+    return postJson(`${API_BASE}/uom`, payload, 'Failed to create unit of measure');
+  },
+
+  async createSpecification(payload: any) {
+    return postJson(`${API_BASE}/specifications`, payload, 'Failed to create specification');
+  },
+
+  async createCustomer(payload: any) {
+    return postJson(`${API_BASE}/customers`, payload, 'Failed to create customer');
+  },
+
+  async createTaxCode(payload: any) {
+    return postJson(`${API_BASE}/tax-codes`, payload, 'Failed to create tax/HSN code');
   },
 };

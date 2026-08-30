@@ -1,5 +1,19 @@
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api';
 
+async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const token = localStorage.getItem('amrita_access_token');
+  const headers = new Headers(init.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const response = await globalThis.fetch(input, { ...init, headers });
+  if (response.status === 401 && token) {
+    localStorage.removeItem('amrita_access_token');
+    globalThis.dispatchEvent(new Event('amrita-auth-expired'));
+  }
+  return response;
+}
+
+const fetch = apiFetch;
+
 async function postJson(url: string, payload: any, errorMessage: string) {
   const res = await fetch(url, {
     method: 'POST',
@@ -14,6 +28,66 @@ async function postJson(url: string, payload: any, errorMessage: string) {
 }
 
 export const api = {
+  async login(username: string, password: string) {
+    return postJson(`${API_BASE}/auth/login`, { username, password }, 'Login failed');
+  },
+
+  async getCurrentUser() {
+    const res = await fetch(`${API_BASE}/auth/me`);
+    if (!res.ok) throw new Error('Unable to load current user');
+    return res.json();
+  },
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    return postJson(
+      `${API_BASE}/auth/change-password`,
+      { current_password: currentPassword, new_password: newPassword },
+      'Unable to change password',
+    );
+  },
+
+  async getAccessControl() {
+    const res = await fetch(`${API_BASE}/access-control`);
+    if (!res.ok) throw new Error('Unable to load access-control metadata');
+    return res.json();
+  },
+
+  async getUsers() {
+    const res = await fetch(`${API_BASE}/users`);
+    if (!res.ok) throw new Error('Unable to load users');
+    return res.json();
+  },
+
+  async createUser(payload: any) {
+    return postJson(`${API_BASE}/users`, payload, 'Unable to create user');
+  },
+
+  async updateUser(id: string, payload: any) {
+    const res = await fetch(`${API_BASE}/users/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.detail || 'Unable to update user');
+    }
+    return res.json();
+  },
+
+  async resetUserPassword(id: string, newPassword: string) {
+    return postJson(`${API_BASE}/users/${id}/reset-password`, { new_password: newPassword }, 'Unable to reset password');
+  },
+
+  async deactivateUser(id: string) {
+    const res = await fetch(`${API_BASE}/users/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.detail || 'Unable to deactivate user');
+    }
+    return res.json();
+  },
+
   async getInventory() {
     const res = await fetch(`${API_BASE}/inventory`);
     if (!res.ok) throw new Error('Failed to fetch inventory');

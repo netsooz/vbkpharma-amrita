@@ -5,6 +5,22 @@ from sqlalchemy.orm import relationship
 from database import Base
 
 
+class AppUser(Base):
+    __tablename__ = "app_users"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String(80), unique=True, index=True, nullable=False)
+    full_name = Column(String(150), nullable=False)
+    email = Column(String(150), unique=True, index=True, nullable=True)
+    password_hash = Column(String(300), nullable=False)
+    role = Column(String(50), default="Operator")
+    permissions = Column(JSON, default=list)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True)
+
+
 class Supplier(Base):
     __tablename__ = "suppliers"
 

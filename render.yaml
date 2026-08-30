@@ -13,6 +13,14 @@ services:
         value: sqlite:///./amrita_demo.db
       - key: CORS_ORIGINS
         value: https://vbkpharma-amrita.onrender.com
+      - key: AUTH_SECRET_KEY
+        generateValue: true
+      - key: AUTH_TOKEN_TTL_SECONDS
+        value: 28800
+      - key: ADMIN_INITIAL_USERNAME
+        value: admin
+      - key: ADMIN_INITIAL_PASSWORD
+        sync: false
 
   - type: web
     name: vbkpharma-amrita

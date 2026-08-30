@@ -1,14 +1,17 @@
 print("######## MAIN.PY LOADED ########")
 import uuid
-from fastapi import FastAPI, Depends, HTTPException, Query
+import os
+from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-from database import get_db, initialize_db
+from database import SessionLocal, get_db, initialize_db
 import models
+from auth import create_access_token, decode_access_token, hash_password, verify_password
 from sqlalchemy.orm import selectinload
 
 initialize_db()
@@ -18,6 +21,113 @@ app = FastAPI(
     description="21 CFR Part 11 & GAMP 5 Compliant API for Tablet Manufacturing",
     version="1.0.0"
 )
+
+MODULE_PERMISSIONS = [
+    "master_data",
+    "transactions",
+    "boms",
+    "manufacturing",
+    "ebpr",
+    "reports",
+    "user_management",
+]
+
+ROLE_TEMPLATES = {
+    "Administrator": MODULE_PERMISSIONS,
+    "QA Manager": ["master_data", "transactions", "boms", "manufacturing", "ebpr", "reports"],
+    "Warehouse Manager": ["master_data", "transactions", "reports"],
+    "Production Operator": ["transactions", "boms", "manufacturing"],
+    "QC Analyst": ["master_data", "transactions", "ebpr", "reports"],
+    "Auditor": ["ebpr", "reports"],
+}
+
+
+def serialize_user(user: models.AppUser) -> dict:
+    return {
+        "id": user.id,
+        "username": user.username,
+        "full_name": user.full_name,
+        "email": user.email,
+        "role": user.role,
+        "permissions": user.permissions or [],
+        "is_active": user.is_active,
+        "created_at": user.created_at,
+        "last_login_at": user.last_login_at,
+    }
+
+
+def ensure_default_admin() -> None:
+    db = SessionLocal()
+    try:
+        if db.query(models.AppUser).count() == 0:
+            db.add(models.AppUser(
+                username=os.getenv("ADMIN_INITIAL_USERNAME", "admin"),
+                full_name="System Administrator",
+                email=os.getenv("ADMIN_INITIAL_EMAIL", "admin@amritapharma.local"),
+                password_hash=hash_password(os.getenv("ADMIN_INITIAL_PASSWORD", "Admin@123")),
+                role="Administrator",
+                permissions=MODULE_PERMISSIONS,
+                is_active=True,
+            ))
+            db.commit()
+    finally:
+        db.close()
+
+
+def permission_for_path(path: str) -> Optional[str]:
+    path_permissions = (
+        (("/api/users", "/api/access-control"), "user_management"),
+        (("/api/inventory", "/api/transactions"), "transactions"),
+        (("/api/formulations",), "boms"),
+        (("/api/batch",), "manufacturing"),
+        (("/api/audit-logs",), "ebpr"),
+        ((
+            "/api/master-data", "/api/materials", "/api/suppliers",
+            "/api/manufacturers", "/api/storage-locations", "/api/equipment",
+            "/api/uom", "/api/specifications", "/api/customers", "/api/tax-codes",
+        ), "master_data"),
+    )
+    for prefixes, permission in path_permissions:
+        if path.startswith(prefixes):
+            return permission
+    return None
+
+
+@app.middleware("http")
+async def authenticate_api_request(request: Request, call_next):
+    path = request.url.path
+    if (
+        request.method == "OPTIONS"
+        or not path.startswith("/api/")
+        or path in {"/api/health", "/api/auth/login"}
+    ):
+        return await call_next(request)
+
+    authorization = request.headers.get("Authorization", "")
+    if not authorization.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Authentication required"})
+
+    try:
+        token_data = decode_access_token(authorization.removeprefix("Bearer ").strip())
+    except ValueError as exc:
+        return JSONResponse(status_code=401, content={"detail": str(exc)})
+
+    db = SessionLocal()
+    try:
+        user = db.query(models.AppUser).filter(models.AppUser.id == token_data.get("sub")).first()
+        if not user or not user.is_active:
+            return JSONResponse(status_code=401, content={"detail": "User is inactive or unavailable"})
+        required_permission = permission_for_path(path)
+        if required_permission and required_permission not in (user.permissions or []):
+            return JSONResponse(status_code=403, content={"detail": f"Access denied: {required_permission} permission required"})
+        request.state.user_id = user.id
+    finally:
+        db.close()
+
+    return await call_next(request)
+
+
+ensure_default_admin()
 
 
 # Raw material catalog sourced from Reference/2025-07-10 FDA Raw Material List.pdf
@@ -857,6 +967,168 @@ class StockTransactionCreate(BaseModel):
     scanned_value: Optional[str] = None
     expiry_date: Optional[str] = None
     supplier_lot: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserCreate(BaseModel):
+    username: str
+    full_name: str
+    email: Optional[str] = None
+    password: str
+    role: str = "Production Operator"
+    permissions: Optional[List[str]] = None
+    is_active: bool = True
+
+
+class UserUpdate(BaseModel):
+    full_name: str
+    email: Optional[str] = None
+    role: str
+    permissions: List[str]
+    is_active: bool
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class PasswordResetRequest(BaseModel):
+    new_password: str
+
+
+def validate_permissions(permissions: List[str]) -> List[str]:
+    invalid = sorted(set(permissions) - set(MODULE_PERMISSIONS))
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"Unknown permissions: {', '.join(invalid)}")
+    return list(dict.fromkeys(permissions))
+
+
+def validate_password(password: str) -> None:
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must contain at least 8 characters")
+
+
+@app.post("/api/auth/login")
+def login(item: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(models.AppUser).filter(
+        models.AppUser.username == item.username.strip().lower()
+    ).first()
+    if not user or not user.is_active or not verify_password(item.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    user.last_login_at = datetime.utcnow()
+    db.commit()
+    return {
+        "access_token": create_access_token(user.id, user.username, user.permissions or []),
+        "token_type": "bearer",
+        "user": serialize_user(user),
+    }
+
+
+@app.get("/api/auth/me")
+def current_user(request: Request, db: Session = Depends(get_db)):
+    user = db.query(models.AppUser).filter(models.AppUser.id == request.state.user_id).first()
+    return serialize_user(user)
+
+
+@app.post("/api/auth/change-password")
+def change_password(item: PasswordChangeRequest, request: Request, db: Session = Depends(get_db)):
+    user = db.query(models.AppUser).filter(models.AppUser.id == request.state.user_id).first()
+    if not verify_password(item.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    validate_password(item.new_password)
+    user.password_hash = hash_password(item.new_password)
+    db.commit()
+    return {"message": "Password changed successfully"}
+
+
+@app.get("/api/access-control")
+def access_control_metadata():
+    return {"permissions": MODULE_PERMISSIONS, "role_templates": ROLE_TEMPLATES}
+
+
+@app.get("/api/users")
+def list_users(db: Session = Depends(get_db)):
+    return [serialize_user(user) for user in db.query(models.AppUser).order_by(models.AppUser.username).all()]
+
+
+@app.post("/api/users")
+def create_user(item: UserCreate, db: Session = Depends(get_db)):
+    username = item.username.strip().lower()
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required")
+    if db.query(models.AppUser).filter(models.AppUser.username == username).first():
+        raise HTTPException(status_code=400, detail="Username already exists")
+    if item.email and db.query(models.AppUser).filter(models.AppUser.email == item.email.strip().lower()).first():
+        raise HTTPException(status_code=400, detail="Email already exists")
+    validate_password(item.password)
+    permissions = item.permissions if item.permissions is not None else ROLE_TEMPLATES.get(item.role, [])
+
+    user = models.AppUser(
+        username=username,
+        full_name=item.full_name.strip(),
+        email=item.email.strip().lower() if item.email else None,
+        password_hash=hash_password(item.password),
+        role=item.role,
+        permissions=validate_permissions(permissions),
+        is_active=item.is_active,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return serialize_user(user)
+
+
+@app.put("/api/users/{user_id}")
+def update_user(user_id: str, item: UserUpdate, request: Request, db: Session = Depends(get_db)):
+    user = db.query(models.AppUser).filter(models.AppUser.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == request.state.user_id and not item.is_active:
+        raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
+    if item.email:
+        duplicate = db.query(models.AppUser).filter(
+            models.AppUser.email == item.email.strip().lower(), models.AppUser.id != user_id
+        ).first()
+        if duplicate:
+            raise HTTPException(status_code=400, detail="Email already exists")
+
+    user.full_name = item.full_name.strip()
+    user.email = item.email.strip().lower() if item.email else None
+    user.role = item.role
+    user.permissions = validate_permissions(item.permissions)
+    user.is_active = item.is_active
+    db.commit()
+    db.refresh(user)
+    return serialize_user(user)
+
+
+@app.post("/api/users/{user_id}/reset-password")
+def reset_user_password(user_id: str, item: PasswordResetRequest, db: Session = Depends(get_db)):
+    user = db.query(models.AppUser).filter(models.AppUser.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    validate_password(item.new_password)
+    user.password_hash = hash_password(item.new_password)
+    db.commit()
+    return {"message": "Password reset successfully"}
+
+
+@app.delete("/api/users/{user_id}")
+def deactivate_user(user_id: str, request: Request, db: Session = Depends(get_db)):
+    if user_id == request.state.user_id:
+        raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
+    user = db.query(models.AppUser).filter(models.AppUser.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_active = False
+    db.commit()
+    return {"message": f"User {user.username} deactivated"}
 
 
 @app.get("/")

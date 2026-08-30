@@ -1,109 +1,124 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BatchExecutionWizard } from './pages/BatchExecutionWizard';
 import { BatchReportDashboard } from './pages/BatchReportDashboard';
 import { MasterDataDashboard } from './pages/MasterDataDashboard';
 import { TransactionsDashboard } from './pages/TransactionsDashboard';
 import { BOMDashboard } from './pages/BOMDashboard';
 import { ReportsDashboard } from './pages/ReportsDashboard';
+import { LoginPage } from './pages/LoginPage';
+import { UserManagementDashboard } from './pages/UserManagementDashboard';
+import type { AppUser, ModulePermission } from './types/auth';
+import { api } from './services/api';
+
+interface NavItem {
+  permission: ModulePermission;
+  label: string;
+  icon: string;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { permission: 'master_data', label: 'Master Data Management', icon: '🧬' },
+  { permission: 'transactions', label: 'Transactions', icon: '🔁' },
+  { permission: 'boms', label: 'BOMs', icon: '🧪' },
+  { permission: 'manufacturing', label: '10-Step Batch Execution', icon: '⚙️' },
+  { permission: 'ebpr', label: 'eBPR Records & Audit', icon: '📑' },
+  { permission: 'reports', label: 'Reports', icon: '📊' },
+  { permission: 'user_management', label: 'User Management', icon: '👤' },
+];
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'masterData' | 'transactions' | 'boms' | 'manufacturing' | 'ebpr' | 'reports'>('masterData');
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<ModulePermission>('master_data');
+
+  useEffect(() => {
+    const token = localStorage.getItem('amrita_access_token');
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    api.getCurrentUser()
+      .then((currentUser: AppUser) => {
+        setUser(currentUser);
+        setActiveTab(currentUser.permissions[0] || 'reports');
+      })
+      .catch(() => localStorage.removeItem('amrita_access_token'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const expire = () => {
+      setUser(null);
+      setLoading(false);
+    };
+    globalThis.addEventListener('amrita-auth-expired', expire);
+    return () => globalThis.removeEventListener('amrita-auth-expired', expire);
+  }, []);
+
+  const handleLogin = (authenticatedUser: AppUser) => {
+    setUser(authenticatedUser);
+    setActiveTab(authenticatedUser.permissions[0] || 'reports');
+  };
+
+  const logout = () => {
+    localStorage.removeItem('amrita_access_token');
+    setUser(null);
+  };
+
+  if (loading) {
+    return <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center text-sm">Checking secure session...</div>;
+  }
+
+  if (!user) return <LoginPage onLogin={handleLogin} />;
+
+  const visibleItems = NAV_ITEMS.filter(item => user.permissions.includes(item.permission));
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
-      {/* Top Application Bar */}
-      <header className="bg-slate-900 text-white px-6 py-3.5 flex items-center justify-between shadow-md border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white shadow-sm">
-            A
-          </div>
+      <header className="bg-slate-900 text-white px-5 py-3 flex items-center justify-between shadow-md border-b border-slate-800 gap-4">
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="w-8 h-8 rounded-md bg-blue-600 flex items-center justify-center font-bold">A</div>
           <div>
-            <h1 className="font-bold text-base tracking-wide leading-none">AMRITA PHARMA R&D</h1>
-            <span className="text-[10px] text-slate-400 tracking-wider uppercase font-semibold">
-              Tablet MES & Batch Execution
-            </span>
+            <h1 className="font-bold text-sm leading-none">AMRITA PHARMA R&amp;D</h1>
+            <span className="text-[10px] text-slate-400 uppercase font-semibold">Tablet MES &amp; Batch Execution</span>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <nav className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg border border-slate-700">
-          <button
-            onClick={() => setActiveTab('masterData')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
-              activeTab === 'masterData'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            🧬 Master Data Management
-          </button>
-          <button
-            onClick={() => setActiveTab('transactions')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
-              activeTab === 'transactions'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            🔁 Transactions
-          </button>
-          <button
-            onClick={() => setActiveTab('boms')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
-              activeTab === 'boms'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            🧪 BOMs
-          </button>
-          <button
-            onClick={() => setActiveTab('manufacturing')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
-              activeTab === 'manufacturing'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            ⚙️ 10-Step Batch Execution
-          </button>
-          <button
-            onClick={() => setActiveTab('ebpr')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
-              activeTab === 'ebpr'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            📑 eBPR Records & Audit
-          </button>
-          <button
-            onClick={() => setActiveTab('reports')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${
-              activeTab === 'reports'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-            }`}
-          >
-            📊 Reports
-          </button>
+        <nav className="flex items-center gap-1 bg-slate-800 p-1 rounded-md border border-slate-700 overflow-x-auto">
+          {visibleItems.map(item => (
+            <button
+              key={item.permission}
+              onClick={() => setActiveTab(item.permission)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded whitespace-nowrap transition ${
+                activeTab === item.permission
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
+              }`}
+            >
+              {item.icon} {item.label}
+            </button>
+          ))}
         </nav>
 
-        {/* User Badge */}
-        <div className="flex items-center gap-3">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span className="text-xs text-slate-300 font-medium">Operator ID: <strong className="text-white">RND-8041</strong></span>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-right hidden lg:block">
+            <div className="text-xs font-semibold">{user.full_name}</div>
+            <div className="text-[10px] text-slate-400">{user.role} · {user.username}</div>
+          </div>
+          <button onClick={logout} title="Sign out" className="px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-700 rounded">
+            Sign out
+          </button>
         </div>
       </header>
 
-      {/* Main View Area */}
       <main className="flex-1">
-        {activeTab === 'masterData' && <MasterDataDashboard />}
+        {activeTab === 'master_data' && <MasterDataDashboard />}
         {activeTab === 'transactions' && <TransactionsDashboard />}
         {activeTab === 'boms' && <BOMDashboard />}
         {activeTab === 'manufacturing' && <BatchExecutionWizard />}
         {activeTab === 'ebpr' && <BatchReportDashboard />}
         {activeTab === 'reports' && <ReportsDashboard />}
+        {activeTab === 'user_management' && <UserManagementDashboard currentUser={user} />}
       </main>
     </div>
   );

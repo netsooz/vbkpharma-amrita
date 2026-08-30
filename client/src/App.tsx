@@ -66,7 +66,12 @@ function App() {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center text-sm">Checking secure session...</div>;
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col gap-3 items-center justify-center text-sm">
+        <img src="/favicon.ico" alt="Amrita" className="w-12 h-12 object-contain" />
+        Checking secure session...
+      </div>
+    );
   }
 
   if (!user) return <LoginPage onLogin={handleLogin} />;
@@ -75,21 +80,21 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
-      <header className="bg-slate-900 text-white px-5 py-3 flex items-center justify-between shadow-md border-b border-slate-800 gap-4">
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="w-8 h-8 rounded-md bg-blue-600 flex items-center justify-center font-bold">A</div>
+      <header className="bg-slate-900 text-white px-4 py-2.5 flex flex-wrap lg:flex-nowrap items-center justify-between shadow-md border-b border-slate-800 gap-x-3 gap-y-2">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <img src="/favicon.ico" alt="Amrita Pharma" className="w-9 h-9 object-contain shrink-0" />
           <div>
-            <h1 className="font-bold text-sm leading-none">AMRITA PHARMA R&amp;D</h1>
-            <span className="text-[10px] text-slate-400 uppercase font-semibold">Tablet MES &amp; Batch Execution</span>
+            <h1 className="font-bold text-[13px] leading-none whitespace-nowrap">AMRITA PHARMA R&amp;D</h1>
+            <span className="text-[9px] text-slate-400 uppercase font-semibold whitespace-nowrap">Tablet MES &amp; Batch Execution</span>
           </div>
         </div>
 
-        <nav className="flex items-center gap-1 bg-slate-800 p-1 rounded-md border border-slate-700 overflow-x-auto">
+        <nav className="order-3 lg:order-none w-full lg:w-auto lg:flex-1 flex flex-wrap items-center justify-center gap-0.5 bg-slate-800 p-1 rounded-md border border-slate-700">
           {visibleItems.map(item => (
             <button
               key={item.permission}
               onClick={() => setActiveTab(item.permission)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded whitespace-nowrap transition ${
+              className={`px-2 py-1.5 text-[11px] font-semibold rounded whitespace-nowrap transition ${
                 activeTab === item.permission
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'text-slate-300 hover:text-white hover:bg-slate-700'
@@ -100,12 +105,10 @@ function App() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-right hidden lg:block">
-            <div className="text-xs font-semibold">{user.full_name}</div>
-            <div className="text-[10px] text-slate-400">{user.role} · {user.username}</div>
-          </div>
-          <button onClick={logout} title="Sign out" className="px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-700 rounded">
+        <div className="flex flex-col items-end justify-center shrink-0 min-w-28 leading-tight">
+          <div className="text-[11px] font-semibold max-w-40 truncate" title={user.full_name}>{user.full_name}</div>
+          <div className="text-[9px] text-slate-400 mb-0.5">{user.role} · {user.username}</div>
+          <button onClick={logout} title="Sign out" className="px-2 py-0.5 text-[10px] font-semibold text-slate-300 hover:text-white hover:bg-slate-700 rounded">
             Sign out
           </button>
         </div>

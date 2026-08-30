@@ -31,7 +31,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
       <div className="w-full max-w-sm bg-white rounded-lg shadow-2xl overflow-hidden">
         <div className="bg-blue-700 px-6 py-7 text-white">
-          <div className="w-10 h-10 bg-white text-blue-700 rounded-md flex items-center justify-center font-bold text-lg mb-4">A</div>
+          <img src="/favicon.ico" alt="Amrita Pharma" className="w-14 h-14 object-contain mb-4" />
           <h1 className="text-xl font-bold">Amrita Pharma R&amp;D</h1>
           <p className="text-xs text-blue-100 mt-1">Secure MES &amp; Master Data Access</p>
         </div>

@@ -38,6 +38,7 @@ export const InventoryManagementDashboard: React.FC = () => {
         quantity: d.quantity,
         uom: d.uom,
         storageLocation: d.storage_location,
+        barcode: d.barcode,
         status: d.status,
         qcStatus: d.qc_status || (d.status === 'Approved' ? 'Pass' : d.status === 'Rejected' ? 'Fail' : 'Quarantine'),
         qcTestedBy: d.qc_tested_by,
@@ -67,7 +68,8 @@ export const InventoryManagementDashboard: React.FC = () => {
       item.materialName.toLowerCase().includes(query) ||
       item.lotNumber.toLowerCase().includes(query) ||
       item.materialCode.toLowerCase().includes(query) ||
-      item.supplierLot.toLowerCase().includes(query);
+      item.supplierLot.toLowerCase().includes(query) ||
+      (item.barcode || '').toLowerCase().includes(query);
 
     const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -224,7 +226,8 @@ export const InventoryManagementDashboard: React.FC = () => {
               <thead className="bg-slate-100 text-xs font-semibold text-slate-700 uppercase tracking-wider border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3">Internal Lot #</th>
-                  <th className="px-4 py-3">Material Code & Name</th>
+                  <th className="px-4 py-3">Material Code &amp; Name</th>
+                  <th className="px-4 py-3">Lot Barcode</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Supplier & Lot</th>
                   <th className="px-4 py-3">Stock Qty</th>
@@ -237,7 +240,7 @@ export const InventoryManagementDashboard: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredItems.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center py-8 text-slate-400">
+                    <td colSpan={10} className="text-center py-8 text-slate-400">
                       No matching material lots found. Click "+ Goods Inward (GRN)" to add one.
                     </td>
                   </tr>
@@ -250,6 +253,9 @@ export const InventoryManagementDashboard: React.FC = () => {
                       <td className="px-4 py-3">
                         <div className="font-semibold text-slate-800">{item.materialName}</div>
                         <div className="text-xs text-slate-400">{item.materialCode}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-mono text-[10px] text-slate-600 max-w-40 break-all">{item.barcode || 'Not generated'}</div>
                       </td>
                       <td className="px-4 py-3">
                         <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-700">
@@ -300,6 +306,20 @@ export const InventoryManagementDashboard: React.FC = () => {
                             <button onClick={() => triggerStatusChange(item.lotNumber, 'Quarantine')} className="px-2.5 py-1 text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 rounded">Quarantine</button>
                           )}
                           <button onClick={() => setEvidenceLot(item.lotNumber)} className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded">Evidence ({item.qcReportCount || 0})</button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                if (!item.barcode) await api.generateLotBarcode(item.lotNumber);
+                                await api.downloadLotBarcodeLabel(item.lotNumber);
+                                await loadInventory();
+                              } catch (err) {
+                                alert(`Barcode label error: ${err}`);
+                              }
+                            }}
+                            className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded"
+                          >
+                            {item.barcode ? 'Print Label' : 'Generate Label'}
+                          </button>
                         </div>
                       </td>
                     </tr>

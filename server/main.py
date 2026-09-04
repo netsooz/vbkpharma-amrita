@@ -13,7 +13,7 @@ from datetime import datetime
 from database import SessionLocal, get_db, initialize_db
 import models
 from auth import create_access_token, decode_access_token, hash_password, verify_password
-from reporting import REPORTS, generate_csv, generate_pdf, report_catalog
+from reporting import REPORTS, generate_barcode_label, generate_csv, generate_pdf, report_catalog
 from sqlalchemy.orm import selectinload
 
 initialize_db()
@@ -1234,6 +1234,7 @@ def create_goods_inward(item: InventoryItemCreate, db: Session = Depends(get_db)
         expiry_date=item.expiry_date,
         status="Quarantine"
     )
+    new_lot.barcode = new_lot_barcode(new_lot)
     db.add(new_lot)
 
     audit = models.AuditLog(
@@ -1315,6 +1316,38 @@ def list_qc_reports(lot_number: str, db: Session = Depends(get_db)):
         "test_result": report.test_result, "notes": report.notes,
         "uploaded_by": report.uploaded_by, "uploaded_at": report.uploaded_at,
     } for report in reports]
+
+
+def new_lot_barcode(lot: models.InventoryLot) -> str:
+    return f"AMR-{lot.material_code}-{lot.lot_number}-{uuid.uuid4().hex[:8].upper()}"
+
+
+@app.post("/api/inventory/{lot_number}/barcode")
+def generate_lot_barcode(lot_number: str, request: Request, db: Session = Depends(get_db)):
+    lot = db.query(models.InventoryLot).filter(models.InventoryLot.lot_number == lot_number).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    if not lot.barcode:
+        lot.barcode = new_lot_barcode(lot)
+        db.commit()
+        db.refresh(lot)
+        action = "BARCODE_GENERATED"
+    else:
+        action = "BARCODE_REPRINT_REQUESTED"
+    audit_event("InventoryLot", lot.id, action, request.state.username, request.state.user_role, "Lot barcode control", {"lot_number": lot.lot_number, "material_code": lot.material_code, "barcode": lot.barcode})
+    return {"lot_number": lot.lot_number, "material_code": lot.material_code, "barcode": lot.barcode}
+
+
+@app.get("/api/inventory/{lot_number}/barcode-label.pdf")
+def download_lot_barcode_label(lot_number: str, request: Request, db: Session = Depends(get_db)):
+    lot = db.query(models.InventoryLot).filter(models.InventoryLot.lot_number == lot_number).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    if not lot.barcode:
+        raise HTTPException(status_code=400, detail="Generate a barcode before printing the label")
+    audit_event("InventoryLot", lot.id, "BARCODE_LABEL_PRINTED", request.state.username, request.state.user_role, "Controlled label print", {"lot_number": lot.lot_number, "barcode": lot.barcode})
+    filename = f"lot-label-{lot.lot_number}.pdf"
+    return Response(generate_barcode_label(lot), media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @app.post("/api/inventory/{lot_number}/qc-reports")
@@ -1750,6 +1783,10 @@ TRANSACTION_CODE_PREFIXES = {
 _QUANTITY_REDUCING_TYPES = {"MATERIAL_ISSUE", "GOODS_RETURN_SUPPLIER", "MATERIAL_REJECTION", "SAMPLE_WITHDRAWAL"}
 # Transaction types where quantity is not applicable (barcode operations reference a lot, not a movement)
 _QUANTITY_EXEMPT_TYPES = {"BARCODE_GENERATION", "BARCODE_VALIDATION"}
+_SCAN_REQUIRED_TYPES = {
+    "GOODS_RETURN_SUPPLIER", "MATERIAL_ISSUE", "MATERIAL_RETURN", "STOCK_TRANSFER",
+    "STOCK_ADJUSTMENT", "MATERIAL_REJECTION", "SAMPLE_WITHDRAWAL",
+}
 
 
 @app.get("/api/transactions")
@@ -1761,7 +1798,7 @@ def list_transactions(transaction_type: Optional[str] = Query(None), db: Session
 
 
 @app.post("/api/transactions")
-def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_db)):
+def create_transaction(item: StockTransactionCreate, request: Request, db: Session = Depends(get_db)):
     txn_type = item.transaction_type.upper()
     if txn_type not in VALID_TRANSACTION_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported transaction type: {item.transaction_type}")
@@ -1769,6 +1806,8 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
         raise HTTPException(status_code=400, detail="Quantity must be non-zero")
     if txn_type in ("BARCODE_GENERATION", "BARCODE_VALIDATION") and not item.lot_number:
         raise HTTPException(status_code=400, detail="Lot number is required for barcode operations")
+    if txn_type in _SCAN_REQUIRED_TYPES and not item.lot_number:
+        raise HTTPException(status_code=400, detail="Lot number is required for this controlled material movement")
 
     prefix = TRANSACTION_CODE_PREFIXES[txn_type]
     existing_count = db.query(models.StockTransaction).filter(models.StockTransaction.transaction_type == txn_type).count()
@@ -1780,15 +1819,33 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
         if not lot and txn_type != "GOODS_INWARD":
             raise HTTPException(status_code=404, detail=f"Lot {item.lot_number} not found")
 
+    if txn_type in _SCAN_REQUIRED_TYPES:
+        if not lot.barcode:
+            raise HTTPException(status_code=400, detail="This lot has no barcode. Generate and label the lot before movement")
+        if not item.scanned_value or item.scanned_value != lot.barcode:
+            audit_event("BarcodeVerification", lot.id, "BARCODE_SCAN_FAILED", request.state.username, request.state.user_role, "Material identity verification", {"transaction_type": txn_type, "lot_number": lot.lot_number, "expected_material": lot.material_code, "supplied_material": item.material_code})
+            raise HTTPException(status_code=400, detail="Scanned barcode does not match the selected lot")
+        if item.material_code != lot.material_code:
+            audit_event("BarcodeVerification", lot.id, "MATERIAL_MISMATCH", request.state.username, request.state.user_role, "Material identity verification", {"transaction_type": txn_type, "lot_material": lot.material_code, "selected_material": item.material_code})
+            raise HTTPException(status_code=400, detail="Selected material does not match the scanned lot")
+        if txn_type == "MATERIAL_ISSUE":
+            if lot.status != "Approved" or lot.qc_status != "Pass":
+                raise HTTPException(status_code=400, detail="Only QC Pass/Approved lots may be issued to production")
+            try:
+                if datetime.fromisoformat(lot.expiry_date).date() < datetime.utcnow().date():
+                    raise HTTPException(status_code=400, detail="Expired/retest-due lot cannot be issued")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Lot expiry/retest date is invalid")
+        audit_event("BarcodeVerification", lot.id, "BARCODE_SCAN_PASSED", request.state.username, request.state.user_role, "Material identity verification", {"transaction_type": txn_type, "lot_number": lot.lot_number, "material_code": lot.material_code})
+
     txn_status = "Completed"
     reference_doc = item.reference_doc
     reason = item.reason
     new_lot_number = item.lot_number
 
     if txn_type == "BARCODE_GENERATION":
-        generated_barcode = f"BC-{lot.material_code}-{lot.lot_number}-{uuid.uuid4().hex[:6].upper()}"
-        lot.barcode = generated_barcode
-        reference_doc = generated_barcode
+        lot.barcode = lot.barcode or new_lot_barcode(lot)
+        reference_doc = lot.barcode
         reason = reason or "Barcode generated and assigned to lot"
     elif txn_type == "BARCODE_VALIDATION":
         if not item.scanned_value:
@@ -1823,6 +1880,7 @@ def create_transaction(item: StockTransactionCreate, db: Session = Depends(get_d
             expiry_date=item.expiry_date,
             status="Quarantine",
         )
+        lot.barcode = new_lot_barcode(lot)
         db.add(lot)
         db.flush()
         reason = reason or "New lot received and placed in quarantine"

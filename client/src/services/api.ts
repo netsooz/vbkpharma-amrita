@@ -109,6 +109,24 @@ export const api = {
     return res.json();
   },
 
+  async generateLotBarcode(lotNumber: string) {
+    const res = await fetch(`${API_BASE}/inventory/${encodeURIComponent(lotNumber)}/barcode`, { method: 'POST' });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null);
+      throw new Error(payload?.detail || 'Failed to generate lot barcode');
+    }
+    return res.json();
+  },
+
+  async downloadLotBarcodeLabel(lotNumber: string) {
+    const res = await fetch(`${API_BASE}/inventory/${encodeURIComponent(lotNumber)}/barcode-label.pdf`);
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null);
+      throw new Error(payload?.detail || 'Failed to generate barcode label');
+    }
+    downloadBlob(await res.blob(), `lot-label-${lotNumber}.pdf`);
+  },
+
   async getQcReports(lotNumber: string) {
     const res = await fetch(`${API_BASE}/inventory/${encodeURIComponent(lotNumber)}/qc-reports`);
     if (!res.ok) throw new Error('Failed to fetch QC evidence');

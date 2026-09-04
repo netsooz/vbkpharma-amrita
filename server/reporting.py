@@ -10,6 +10,8 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.pdfgen import canvas
+from reportlab.graphics.barcode import code128
 from sqlalchemy.orm import Session, selectinload
 
 import models
@@ -198,4 +200,25 @@ def generate_pdf(db: Session, key: str, generated_by: str) -> bytes:
     ]))
     story.append(table)
     document.build(story)
+    return buffer.getvalue()
+
+
+def generate_barcode_label(lot: models.InventoryLot) -> bytes:
+    buffer = io.BytesIO()
+    width, height = 100 * mm, 60 * mm
+    pdf = canvas.Canvas(buffer, pagesize=(width, height))
+    pdf.setTitle(f"Lot Label {lot.lot_number}")
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(8 * mm, 52 * mm, "AMRITA PHARMA R&D - CONTROLLED LOT LABEL")
+    pdf.setFont("Helvetica", 8)
+    pdf.drawString(8 * mm, 46 * mm, f"Material: {lot.material_code} - {lot.material_name[:45]}")
+    pdf.drawString(8 * mm, 41 * mm, f"Lot: {lot.lot_number}   Supplier lot: {lot.supplier_lot}")
+    pdf.drawString(8 * mm, 36 * mm, f"Expiry/Retest: {lot.expiry_date}   QC: {lot.qc_status or lot.status}")
+    pdf.drawString(8 * mm, 31 * mm, f"Storage: {lot.storage_location}   Qty: {lot.quantity:g} {lot.uom}")
+    barcode = code128.Code128(lot.barcode, barHeight=15 * mm, barWidth=0.32 * mm, humanReadable=True)
+    barcode.drawOn(pdf, 8 * mm, 10 * mm)
+    pdf.setFont("Helvetica", 6)
+    pdf.drawRightString(96 * mm, 4 * mm, f"Generated UTC {datetime.utcnow().isoformat()}")
+    pdf.showPage()
+    pdf.save()
     return buffer.getvalue()

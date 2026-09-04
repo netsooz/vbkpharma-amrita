@@ -15,6 +15,7 @@ export interface InventoryItem {
   receivedDate: string;
   expiryDate: string;
   storageLocation: string; // e.g., "WH-A/Rack-02/Bin-14"
+  barcode?: string;
   status: InventoryStatus;
   qcStatus?: 'Pass' | 'Fail' | 'Quarantine';
   qcTestedBy?: string;

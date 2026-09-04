@@ -17,6 +17,10 @@ interface NewTransactionModalProps {
 }
 
 const LOCATION_REQUIRED_TYPES: TransactionType[] = ['GOODS_INWARD', 'MATERIAL_ISSUE', 'MATERIAL_RETURN', 'STOCK_TRANSFER'];
+const SCAN_REQUIRED_TYPES: TransactionType[] = [
+  'GOODS_RETURN_SUPPLIER', 'MATERIAL_ISSUE', 'MATERIAL_RETURN', 'STOCK_TRANSFER',
+  'STOCK_ADJUSTMENT', 'MATERIAL_REJECTION', 'SAMPLE_WITHDRAWAL',
+];
 const PARTY_LABELS: Partial<Record<TransactionType, string>> = {
   GOODS_INWARD: 'Supplier',
   GOODS_RETURN_SUPPLIER: 'Supplier',
@@ -54,6 +58,7 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
 
   const meta = TRANSACTION_TYPES.find(t => t.type === transactionType)!;
   const isBarcodeType = transactionType === 'BARCODE_GENERATION' || transactionType === 'BARCODE_VALIDATION';
+  const requiresMovementScan = SCAN_REQUIRED_TYPES.includes(transactionType);
   const needsLocations = !isBarcodeType && (LOCATION_REQUIRED_TYPES.includes(transactionType) || transactionType === 'STOCK_TRANSFER');
   const isNewLotGoodsInward = transactionType === 'GOODS_INWARD' && !lotNumber.trim();
   const selectedMaterial = materials.find(m => m.material_code === materialCode);
@@ -86,6 +91,10 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
     }
     if (transactionType === 'BARCODE_VALIDATION' && !scannedValue.trim()) {
       setError('Scanned barcode value is required for barcode validation.');
+      return;
+    }
+    if (requiresMovementScan && !scannedValue.trim()) {
+      setError('Scan the physical lot barcode before recording this controlled movement.');
       return;
     }
     if (!isBarcodeType && !quantity) {
@@ -255,6 +264,22 @@ export const NewTransactionModal: React.FC<NewTransactionModalProps> = ({ isOpen
                   className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600"
                 />
               </div>
+            </div>
+          )}
+
+          {requiresMovementScan && (
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Physical Lot Barcode Scan *</label>
+              <input
+                type="text"
+                required
+                autoComplete="off"
+                value={scannedValue}
+                onChange={(e) => setScannedValue(e.target.value)}
+                placeholder="Scan the barcode on the physical container label"
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-600 font-mono"
+              />
+              <p className="mt-1 text-[11px] text-slate-500">The scan must match the selected lot and material. Production issue also requires QC Pass and an unexpired lot.</p>
             </div>
           )}
 

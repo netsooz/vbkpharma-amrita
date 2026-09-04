@@ -4,6 +4,10 @@ server/__pycache__/
 server/*.pyc
 server/.env
 server/amrita_demo.db
+amrita_demo.db
+DB-details.md
+WebServicedetails.md
+Screenshot *.png
 
 # Node / Client
 client/node_modules/

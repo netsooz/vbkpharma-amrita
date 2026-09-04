@@ -14,7 +14,7 @@ raw_db_url = os.getenv("DATABASE_URL", "").strip()
 
 
 def _resolve_database_url() -> tuple[str, bool]:
-    if not raw_db_url or "var/run/postgresql" in raw_db_url or os.getenv("RENDER") == "true":
+    if not raw_db_url or raw_db_url in {"postgresql://", "postgres://"} or "var/run/postgresql" in raw_db_url:
         return SQLITE_URL, True
 
     if raw_db_url.startswith("postgres://"):
@@ -50,12 +50,6 @@ Base = declarative_base()
 
 def initialize_db() -> None:
     global DATABASE_URL, is_sqlite, engine, SessionLocal
-
-    if not is_sqlite and os.getenv("RENDER") == "true":
-        DATABASE_URL = SQLITE_URL
-        is_sqlite = True
-        engine = _build_engine(DATABASE_URL)
-        SessionLocal.configure(bind=engine)
 
     if not is_sqlite:
         try:

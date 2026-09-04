@@ -642,6 +642,7 @@ def seed_demo_content(db: Session) -> dict:
         storage_location="WH-01",
         expiry_date="2027-12-31",
         status="Quarantine",
+        qc_status="Quarantine",
     )
     inventory_lot_2 = models.InventoryLot(
         lot_number="LOT-INV-002",
@@ -655,6 +656,9 @@ def seed_demo_content(db: Session) -> dict:
         storage_location="WH-01",
         expiry_date="2028-06-30",
         status="Approved",
+        qc_status="Pass",
+        qc_tested_by="QC Manager",
+        qc_tested_at=datetime.utcnow(),
     )
     db.add_all([inventory_lot_1, inventory_lot_2])
     db.flush()

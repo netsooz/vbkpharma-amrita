@@ -10,7 +10,9 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: DATABASE_URL
-        value: sqlite:///./amrita_demo.db
+        fromDatabase:
+          name: amrita-pharma-db
+          property: connectionString
       - key: CORS_ORIGINS
         value: https://vbkpharma-amrita.onrender.com
       - key: AUTH_SECRET_KEY
@@ -31,3 +33,8 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://vbkpharma-amrita-api.onrender.com
+
+databases:
+  - name: amrita-pharma-db
+    databaseName: amrita_pharma_db
+    user: amrita_pharma_db_user

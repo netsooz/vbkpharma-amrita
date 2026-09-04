@@ -816,6 +816,15 @@ def ensure_demo_seed() -> None:
     db = next(get_db())
     try:
         seed_demo_content(db)
+        for lot in db.query(models.InventoryLot).all():
+            expected_qc_status = {
+                "Approved": "Pass",
+                "Rejected": "Fail",
+                "Quarantine": "Quarantine",
+            }.get(lot.status, lot.qc_status or "Quarantine")
+            if lot.qc_status != expected_qc_status:
+                lot.qc_status = expected_qc_status
+        db.commit()
     finally:
         db.close()
 

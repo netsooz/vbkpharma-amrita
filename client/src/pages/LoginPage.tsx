@@ -4,9 +4,11 @@ import { api } from '../services/api';
 
 interface LoginPageProps {
   onLogin: (user: AppUser) => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, theme, onToggleTheme }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -28,7 +30,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 relative">
+      <button
+        onClick={onToggleTheme}
+        title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+        aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+        className="absolute top-5 right-5 w-9 h-9 flex items-center justify-center rounded border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+      >
+        {theme === 'light' ? '☾' : '☀'}
+      </button>
       <div className="w-full max-w-sm bg-white rounded-lg shadow-2xl overflow-hidden">
         <div className="bg-blue-700 px-6 py-7 text-white">
           <img src="/favicon.ico" alt="Amrita Pharma" className="w-14 h-14 object-contain mb-4" />

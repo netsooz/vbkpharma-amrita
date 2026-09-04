@@ -1,1 +1,131 @@
 @import "tailwindcss";
+
+:root {
+	color-scheme: light;
+}
+
+html,
+body,
+#root {
+	min-height: 100%;
+}
+
+html.dark {
+	color-scheme: dark;
+}
+
+html.dark body {
+	background: #08111f;
+	color: #dbe5f1;
+}
+
+html.dark .bg-white {
+	background-color: #111d2e !important;
+}
+
+html.dark .bg-slate-50 {
+	background-color: #0a1422 !important;
+}
+
+html.dark .bg-slate-100 {
+	background-color: #152235 !important;
+}
+
+html.dark .bg-slate-200 {
+	background-color: #24344a !important;
+}
+
+html.dark .text-slate-900 {
+	color: #f1f5f9 !important;
+}
+
+html.dark .text-slate-800 {
+	color: #e2e8f0 !important;
+}
+
+html.dark .text-slate-700 {
+	color: #cbd5e1 !important;
+}
+
+html.dark .text-slate-600 {
+	color: #b1bfd0 !important;
+}
+
+html.dark .text-slate-500 {
+	color: #94a3b8 !important;
+}
+
+html.dark .text-slate-400 {
+	color: #7f8da2 !important;
+}
+
+html.dark .border-slate-100,
+html.dark .border-slate-200 {
+	border-color: #26364d !important;
+}
+
+html.dark .border-slate-300 {
+	border-color: #3a4b63 !important;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+	background-color: #0c1727;
+	border-color: #3a4b63;
+	color: #e5edf6;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+	color: #718096;
+}
+
+html.dark input:disabled,
+html.dark select:disabled,
+html.dark textarea:disabled {
+	background-color: #1a2739 !important;
+	color: #93a4b8 !important;
+}
+
+html.dark table thead {
+	background-color: #18263a !important;
+}
+
+html.dark table tbody tr:hover {
+	background-color: #15243a !important;
+}
+
+html.dark .shadow-sm,
+html.dark .shadow-md,
+html.dark .shadow-xl,
+html.dark .shadow-2xl {
+	--tw-shadow-color: rgb(0 0 0 / 0.35);
+}
+
+html.dark .bg-blue-50 {
+	background-color: #10284a !important;
+}
+
+html.dark .bg-emerald-50 {
+	background-color: #0d2b29 !important;
+}
+
+html.dark .bg-amber-50 {
+	background-color: #35260d !important;
+}
+
+html.dark .bg-rose-50 {
+	background-color: #3a1721 !important;
+}
+
+html.dark .bg-indigo-50 {
+	background-color: #1d2348 !important;
+}
+
+html.dark .bg-emerald-100,
+html.dark .bg-blue-100,
+html.dark .bg-amber-100,
+html.dark .bg-rose-100 {
+	filter: saturate(0.85) brightness(0.72);
+}

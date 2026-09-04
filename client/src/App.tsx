@@ -10,6 +10,8 @@ import { UserManagementDashboard } from './pages/UserManagementDashboard';
 import type { AppUser, ModulePermission } from './types/auth';
 import { api } from './services/api';
 
+type Theme = 'light' | 'dark';
+
 interface NavItem {
   permission: ModulePermission;
   label: string;
@@ -31,9 +33,20 @@ const firstVisiblePermission = (permissions: ModulePermission[]): ModulePermissi
   NAV_ITEMS.find(item => !item.hidden && permissions.includes(item.permission))?.permission || 'reports';
 
 function App() {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('amrita_theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    return globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ModulePermission>('master_data');
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    document.documentElement.style.colorScheme = theme;
+    localStorage.setItem('amrita_theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     const token = localStorage.getItem('amrita_access_token');
@@ -83,7 +96,9 @@ function App() {
     );
   }
 
-  if (!user) return <LoginPage onLogin={handleLogin} />;
+  const toggleTheme = () => setTheme(current => current === 'light' ? 'dark' : 'light');
+
+  if (!user) return <LoginPage onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />;
 
   const visibleItems = NAV_ITEMS.filter(item => !item.hidden && user.permissions.includes(item.permission));
 
@@ -117,9 +132,19 @@ function App() {
         <div className="flex flex-col items-end justify-center shrink-0 min-w-28 leading-tight">
           <div className="text-[11px] font-semibold max-w-40 truncate" title={user.full_name}>{user.full_name}</div>
           <div className="text-[9px] text-slate-400 mb-0.5">{user.role} · {user.username}</div>
-          <button onClick={logout} title="Sign out" className="px-2 py-0.5 text-[10px] font-semibold text-slate-300 hover:text-white hover:bg-slate-700 rounded">
-            Sign out
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggleTheme}
+              title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+              aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+              className="w-7 h-6 flex items-center justify-center text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded"
+            >
+              {theme === 'light' ? '☾' : '☀'}
+            </button>
+            <button onClick={logout} title="Sign out" className="px-2 py-0.5 text-[10px] font-semibold text-slate-300 hover:text-white hover:bg-slate-700 rounded">
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 

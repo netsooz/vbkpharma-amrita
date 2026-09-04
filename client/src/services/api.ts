@@ -27,6 +27,15 @@ async function postJson(url: string, payload: any, errorMessage: string) {
   return res.json();
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   async login(username: string, password: string) {
     return postJson(`${API_BASE}/auth/login`, { username, password }, 'Login failed');
@@ -35,6 +44,12 @@ export const api = {
   async getCurrentUser() {
     const res = await fetch(`${API_BASE}/auth/me`);
     if (!res.ok) throw new Error('Unable to load current user');
+    return res.json();
+  },
+
+  async logout() {
+    const res = await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+    if (!res.ok) throw new Error('Unable to record logout');
     return res.json();
   },
 
@@ -94,6 +109,31 @@ export const api = {
     return res.json();
   },
 
+  async getQcReports(lotNumber: string) {
+    const res = await fetch(`${API_BASE}/inventory/${encodeURIComponent(lotNumber)}/qc-reports`);
+    if (!res.ok) throw new Error('Failed to fetch QC evidence');
+    return res.json();
+  },
+
+  async uploadQcReport(lotNumber: string, file: File, testResult: string, notes: string) {
+    const body = new FormData();
+    body.append('file', file);
+    body.append('test_result', testResult);
+    body.append('notes', notes);
+    const res = await fetch(`${API_BASE}/inventory/${encodeURIComponent(lotNumber)}/qc-reports`, { method: 'POST', body });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null);
+      throw new Error(payload?.detail || 'Failed to upload QC evidence');
+    }
+    return res.json();
+  },
+
+  async downloadQcReport(reportId: string, filename: string) {
+    const res = await fetch(`${API_BASE}/inventory/qc-reports/${reportId}/download`);
+    if (!res.ok) throw new Error('Failed to download QC evidence');
+    downloadBlob(await res.blob(), filename);
+  },
+
   async createGoodsInward(payload: any) {
     const res = await fetch(`${API_BASE}/inventory/inward`, {
       method: 'POST',
@@ -124,6 +164,26 @@ export const api = {
     const res = await fetch(`${API_BASE}/audit-logs`);
     if (!res.ok) throw new Error('Failed to fetch audit logs');
     return res.json();
+  },
+
+  async getReports() {
+    const res = await fetch(`${API_BASE}/reports`);
+    if (!res.ok) throw new Error('Failed to fetch report catalog');
+    return res.json();
+  },
+
+  async getStorageStatus() {
+    const res = await fetch(`${API_BASE}/storage-status`);
+    if (!res.ok) throw new Error('Failed to fetch storage status');
+    return res.json();
+  },
+
+  async exportReport(reportKey: string, format: 'csv' | 'pdf') {
+    const res = await fetch(`${API_BASE}/reports/${encodeURIComponent(reportKey)}.${format}`);
+    if (!res.ok) throw new Error(`Failed to generate ${format.toUpperCase()} report`);
+    const disposition = res.headers.get('content-disposition') || '';
+    const filename = disposition.match(/filename="?([^";]+)"?/)?.[1] || `${reportKey}.${format}`;
+    downloadBlob(await res.blob(), filename);
   },
 
   async getMasterData() {

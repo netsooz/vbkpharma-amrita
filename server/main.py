@@ -1,9 +1,10 @@
 print("######## MAIN.PY LOADED ########")
 import uuid
 import os
-from fastapi import FastAPI, Depends, HTTPException, Query, Request
+import hashlib
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, Field
@@ -12,6 +13,7 @@ from datetime import datetime
 from database import SessionLocal, get_db, initialize_db
 import models
 from auth import create_access_token, decode_access_token, hash_password, verify_password
+from reporting import REPORTS, generate_csv, generate_pdf, report_catalog
 from sqlalchemy.orm import selectinload
 
 initialize_db()
@@ -56,6 +58,34 @@ def serialize_user(user: models.AppUser) -> dict:
     }
 
 
+def audit_event(
+    entity_name: str,
+    entity_id: str,
+    action: str,
+    performed_by: str,
+    role: str = "System",
+    signature_meaning: str = "System activity",
+    details: Optional[dict] = None,
+) -> None:
+    db = SessionLocal()
+    try:
+        db.add(models.AuditLog(
+            entity_name=entity_name,
+            entity_id=entity_id,
+            action=action,
+            performed_by=performed_by,
+            role=role,
+            signature_meaning=signature_meaning,
+            details_json=details or {},
+        ))
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        print("Audit event write failed:", exc)
+    finally:
+        db.close()
+
+
 def ensure_default_admin() -> None:
     db = SessionLocal()
     try:
@@ -81,6 +111,7 @@ def permission_for_path(path: str) -> Optional[str]:
         (("/api/formulations",), "boms"),
         (("/api/batch",), "manufacturing"),
         (("/api/audit-logs",), "ebpr"),
+        (("/api/reports", "/api/storage-status"), "reports"),
         ((
             "/api/master-data", "/api/materials", "/api/suppliers",
             "/api/manufacturers", "/api/storage-locations", "/api/equipment",
@@ -105,26 +136,38 @@ async def authenticate_api_request(request: Request, call_next):
 
     authorization = request.headers.get("Authorization", "")
     if not authorization.startswith("Bearer "):
+        audit_event("Authentication", request.url.path, "AUTHENTICATION_REQUIRED", "anonymous", details={"method": request.method, "ip": request.client.host if request.client else ""})
         return JSONResponse(status_code=401, content={"detail": "Authentication required"})
 
     try:
         token_data = decode_access_token(authorization.removeprefix("Bearer ").strip())
     except ValueError as exc:
+        audit_event("Authentication", request.url.path, "TOKEN_REJECTED", "unknown", details={"method": request.method, "ip": request.client.host if request.client else "", "reason": str(exc)})
         return JSONResponse(status_code=401, content={"detail": str(exc)})
 
     db = SessionLocal()
     try:
         user = db.query(models.AppUser).filter(models.AppUser.id == token_data.get("sub")).first()
         if not user or not user.is_active:
+            audit_event("Authentication", str(token_data.get("sub", "unknown")), "INACTIVE_USER_REJECTED", str(token_data.get("username", "unknown")), details={"path": path})
             return JSONResponse(status_code=401, content={"detail": "User is inactive or unavailable"})
         required_permission = permission_for_path(path)
         if required_permission and required_permission not in (user.permissions or []):
+            audit_event("Authorization", path, "ACCESS_DENIED", user.username, user.role, details={"method": request.method, "required_permission": required_permission, "ip": request.client.host if request.client else ""})
             return JSONResponse(status_code=403, content={"detail": f"Access denied: {required_permission} permission required"})
         request.state.user_id = user.id
+        request.state.username = user.username
+        request.state.user_role = user.role
     finally:
         db.close()
 
-    return await call_next(request)
+    response = await call_next(request)
+    audit_event(
+        "APIActivity", path, f"{request.method}_{response.status_code}",
+        request.state.username, request.state.user_role, "API request",
+        {"method": request.method, "path": path, "status_code": response.status_code, "ip": request.client.host if request.client else ""},
+    )
+    return response
 
 
 ensure_default_admin()
@@ -1014,15 +1057,17 @@ def validate_password(password: str) -> None:
 
 
 @app.post("/api/auth/login")
-def login(item: LoginRequest, db: Session = Depends(get_db)):
+def login(item: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(models.AppUser).filter(
         models.AppUser.username == item.username.strip().lower()
     ).first()
     if not user or not user.is_active or not verify_password(item.password, user.password_hash):
+        audit_event("Authentication", item.username.strip().lower() or "unknown", "LOGIN_FAILED", item.username.strip().lower() or "unknown", details={"ip": request.client.host if request.client else ""})
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     user.last_login_at = datetime.utcnow()
     db.commit()
+    audit_event("Authentication", user.id, "LOGIN_SUCCEEDED", user.username, user.role, details={"ip": request.client.host if request.client else ""})
     return {
         "access_token": create_access_token(user.id, user.username, user.permissions or []),
         "token_type": "bearer",
@@ -1036,6 +1081,12 @@ def current_user(request: Request, db: Session = Depends(get_db)):
     return serialize_user(user)
 
 
+@app.post("/api/auth/logout")
+def logout(request: Request):
+    audit_event("Authentication", request.state.user_id, "LOGOUT", request.state.username, request.state.user_role)
+    return {"message": "Logout recorded"}
+
+
 @app.post("/api/auth/change-password")
 def change_password(item: PasswordChangeRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(models.AppUser).filter(models.AppUser.id == request.state.user_id).first()
@@ -1044,6 +1095,7 @@ def change_password(item: PasswordChangeRequest, request: Request, db: Session =
     validate_password(item.new_password)
     user.password_hash = hash_password(item.new_password)
     db.commit()
+    audit_event("UserAccount", user.id, "PASSWORD_CHANGED", user.username, user.role, "Password change")
     return {"message": "Password changed successfully"}
 
 
@@ -1081,6 +1133,7 @@ def create_user(item: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    audit_event("UserAccount", user.id, "USER_CREATED", user.username, user.role, details={"permissions": user.permissions, "active": user.is_active})
     return serialize_user(user)
 
 
@@ -1105,17 +1158,19 @@ def update_user(user_id: str, item: UserUpdate, request: Request, db: Session = 
     user.is_active = item.is_active
     db.commit()
     db.refresh(user)
+    audit_event("UserAccount", user.id, "USER_UPDATED", request.state.username, request.state.user_role, details={"target_username": user.username, "role": user.role, "permissions": user.permissions, "active": user.is_active})
     return serialize_user(user)
 
 
 @app.post("/api/users/{user_id}/reset-password")
-def reset_user_password(user_id: str, item: PasswordResetRequest, db: Session = Depends(get_db)):
+def reset_user_password(user_id: str, item: PasswordResetRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(models.AppUser).filter(models.AppUser.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     validate_password(item.new_password)
     user.password_hash = hash_password(item.new_password)
     db.commit()
+    audit_event("UserAccount", user.id, "PASSWORD_RESET", request.state.username, request.state.user_role, "Administrative password reset", {"target_username": user.username})
     return {"message": "Password reset successfully"}
 
 
@@ -1128,6 +1183,7 @@ def deactivate_user(user_id: str, request: Request, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="User not found")
     user.is_active = False
     db.commit()
+    audit_event("UserAccount", user.id, "USER_DEACTIVATED", request.state.username, request.state.user_role, details={"target_username": user.username})
     return {"message": f"User {user.username} deactivated"}
 
 
@@ -1143,7 +1199,11 @@ def health_check():
 
 @app.get("/api/inventory")
 def get_inventory(db: Session = Depends(get_db)):
-    return db.query(models.InventoryLot).order_by(models.InventoryLot.received_date.desc()).all()
+    lots = db.query(models.InventoryLot).order_by(models.InventoryLot.received_date.desc()).all()
+    return [{
+        **{column.name: getattr(lot, column.name) for column in models.InventoryLot.__table__.columns},
+        "qc_report_count": len(lot.qc_reports),
+    } for lot in lots]
 
 
 @app.post("/api/inventory/inward")
@@ -1198,26 +1258,93 @@ def create_goods_inward(item: InventoryItemCreate, db: Session = Depends(get_db)
 
 
 @app.post("/api/inventory/{lot_number}/qc-release")
-def qc_release_lot(lot_number: str, req: QCReleaseRequest, db: Session = Depends(get_db)):
+def qc_release_lot(lot_number: str, req: QCReleaseRequest, request: Request, db: Session = Depends(get_db)):
     lot = db.query(models.InventoryLot).filter(models.InventoryLot.lot_number == lot_number).first()
     if not lot:
         raise HTTPException(status_code=404, detail="Lot not found")
+    user = db.query(models.AppUser).filter(models.AppUser.id == request.state.user_id).first()
+    if not verify_password(req.password_verification, user.password_hash):
+        audit_event("ElectronicSignature", lot_number, "SIGNATURE_REJECTED", user.username, user.role, req.signature_meaning, {"reason": "Password verification failed"})
+        raise HTTPException(status_code=401, detail="Electronic signature password verification failed")
+    if req.status not in {"Approved", "Rejected", "Quarantine"}:
+        raise HTTPException(status_code=400, detail="QC status must be Approved, Rejected, or Quarantine")
 
     lot.status = req.status
-    lot.released_by = f"{req.signer_name} ({req.signature_meaning})"
+    lot.qc_status = {"Approved": "Pass", "Rejected": "Fail", "Quarantine": "Quarantine"}[req.status]
+    lot.qc_tested_by = user.username
+    lot.qc_tested_at = datetime.utcnow()
+    lot.released_by = f"{user.full_name} [{user.username}] ({req.signature_meaning})"
     lot.release_date = datetime.utcnow().strftime("%Y-%m-%d")
 
     audit = models.AuditLog(
         entity_name="InventoryLot",
         entity_id=lot.lot_number,
         action=f"QC_STATUS_CHANGE_TO_{req.status.upper()}",
-        performed_by=req.signer_name,
+        performed_by=user.username,
+        role=user.role,
         signature_meaning=req.signature_meaning,
-        details_json={"new_status": req.status}
+        details_json={"new_status": req.status, "qc_status": lot.qc_status, "typed_signer": req.signer_name}
     )
     db.add(audit)
     db.commit()
-    return {"message": f"Lot {lot_number} successfully updated to {req.status}", "lot": lot}
+    db.refresh(lot)
+    lot_payload = {column.name: getattr(lot, column.name) for column in models.InventoryLot.__table__.columns}
+    return {"message": f"Lot {lot_number} successfully updated to {req.status}", "lot": lot_payload}
+
+
+@app.get("/api/inventory/{lot_number}/qc-reports")
+def list_qc_reports(lot_number: str, db: Session = Depends(get_db)):
+    reports = db.query(models.QCTestReport).filter(models.QCTestReport.lot_number == lot_number).order_by(models.QCTestReport.uploaded_at.desc()).all()
+    return [{
+        "id": report.id, "lot_number": report.lot_number,
+        "original_filename": report.original_filename, "content_type": report.content_type,
+        "file_size": report.file_size, "sha256": report.sha256,
+        "test_result": report.test_result, "notes": report.notes,
+        "uploaded_by": report.uploaded_by, "uploaded_at": report.uploaded_at,
+    } for report in reports]
+
+
+@app.post("/api/inventory/{lot_number}/qc-reports")
+async def upload_qc_report(
+    lot_number: str,
+    request: Request,
+    file: UploadFile = File(...),
+    test_result: str = Form("Pending Review"),
+    notes: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    lot = db.query(models.InventoryLot).filter(models.InventoryLot.lot_number == lot_number).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    allowed_types = {"application/pdf", "image/png", "image/jpeg", "image/tiff"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="QC evidence must be a PDF, PNG, JPEG, or TIFF file")
+    content = await file.read()
+    if not content or len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="QC evidence must be between 1 byte and 10 MB")
+    if test_result not in {"Pass", "Fail", "Quarantine", "Pending Review"}:
+        raise HTTPException(status_code=400, detail="Invalid QC result")
+    report = models.QCTestReport(
+        inventory_lot_id=lot.id, lot_number=lot.lot_number,
+        original_filename=file.filename or "qc-report", content_type=file.content_type,
+        file_size=len(content), sha256=hashlib.sha256(content).hexdigest(), file_content=content,
+        test_result=test_result, notes=notes or None, uploaded_by=request.state.username,
+    )
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+    audit_event("QCTestReport", report.id, "QC_EVIDENCE_UPLOADED", request.state.username, request.state.user_role, "QC evidence attachment", {"lot_number": lot_number, "filename": report.original_filename, "sha256": report.sha256, "result": test_result})
+    return {"id": report.id, "filename": report.original_filename, "sha256": report.sha256, "test_result": report.test_result}
+
+
+@app.get("/api/inventory/qc-reports/{report_id}/download")
+def download_qc_report(report_id: str, request: Request, db: Session = Depends(get_db)):
+    report = db.query(models.QCTestReport).filter(models.QCTestReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="QC report not found")
+    audit_event("QCTestReport", report.id, "QC_EVIDENCE_DOWNLOADED", request.state.username, request.state.user_role, details={"lot_number": report.lot_number, "filename": report.original_filename})
+    safe_name = report.original_filename.replace('"', "")
+    return Response(report.file_content, media_type=report.content_type, headers={"Content-Disposition": f'attachment; filename="{safe_name}"', "X-Content-SHA256": report.sha256})
 
 
 @app.get("/api/batch/{batch_number}")
@@ -1254,6 +1381,40 @@ def get_batch(batch_number: str, db: Session = Depends(get_db)):
 @app.get("/api/audit-logs")
 def get_audit_trail(db: Session = Depends(get_db)):
     return db.query(models.AuditLog).order_by(models.AuditLog.timestamp_utc.desc()).all()
+
+
+@app.get("/api/reports")
+def list_reports():
+    return report_catalog()
+
+
+@app.get("/api/reports/{report_key}.{file_format}")
+def export_report(report_key: str, file_format: str, request: Request, db: Session = Depends(get_db)):
+    if report_key not in REPORTS:
+        raise HTTPException(status_code=404, detail="Unknown report")
+    if file_format not in {"csv", "pdf"}:
+        raise HTTPException(status_code=400, detail="Report format must be csv or pdf")
+    content = generate_csv(db, report_key) if file_format == "csv" else generate_pdf(db, report_key, request.state.username)
+    media_type = "text/csv; charset=utf-8" if file_format == "csv" else "application/pdf"
+    filename = f"{report_key}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.{file_format}"
+    audit_event("Report", report_key, f"REPORT_EXPORTED_{file_format.upper()}", request.state.username, request.state.user_role, "Regulatory report generation", {"filename": filename})
+    return Response(content, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.get("/api/storage-status")
+def storage_status():
+    from database import DATABASE_URL
+    is_ephemeral_sqlite = DATABASE_URL.startswith("sqlite") and os.getenv("RENDER") == "true"
+    return {
+        "backend": "sqlite" if DATABASE_URL.startswith("sqlite") else "postgresql",
+        "durable": not is_ephemeral_sqlite,
+        "qc_evidence_storage": "database",
+        "warning": (
+            "Render web-service SQLite storage is ephemeral. QC evidence and database records may be lost on restart. "
+            "Use the managed PostgreSQL DATABASE_URL or external object storage before production use."
+            if is_ephemeral_sqlite else None
+        ),
+    }
 
 
 @app.get("/api/master-data")

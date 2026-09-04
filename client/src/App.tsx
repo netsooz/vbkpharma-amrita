@@ -14,17 +14,21 @@ interface NavItem {
   permission: ModulePermission;
   label: string;
   icon: string;
+  hidden?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { permission: 'master_data', label: 'Master Data Management', icon: '🧬' },
   { permission: 'transactions', label: 'Transactions', icon: '🔁' },
   { permission: 'boms', label: 'BOMs', icon: '🧪' },
-  { permission: 'manufacturing', label: '10-Step Batch Execution', icon: '⚙️' },
-  { permission: 'ebpr', label: 'eBPR Records & Audit', icon: '📑' },
+  { permission: 'manufacturing', label: '10-Step Batch Execution', icon: '⚙️', hidden: true },
+  { permission: 'ebpr', label: 'eBPR Records & Audit', icon: '📑', hidden: true },
   { permission: 'reports', label: 'Reports', icon: '📊' },
   { permission: 'user_management', label: 'User Management', icon: '👤' },
 ];
+
+const firstVisiblePermission = (permissions: ModulePermission[]): ModulePermission =>
+  NAV_ITEMS.find(item => !item.hidden && permissions.includes(item.permission))?.permission || 'reports';
 
 function App() {
   const [user, setUser] = useState<AppUser | null>(null);
@@ -40,7 +44,7 @@ function App() {
     api.getCurrentUser()
       .then((currentUser: AppUser) => {
         setUser(currentUser);
-        setActiveTab(currentUser.permissions[0] || 'reports');
+        setActiveTab(firstVisiblePermission(currentUser.permissions));
       })
       .catch(() => localStorage.removeItem('amrita_access_token'))
       .finally(() => setLoading(false));
@@ -57,10 +61,15 @@ function App() {
 
   const handleLogin = (authenticatedUser: AppUser) => {
     setUser(authenticatedUser);
-    setActiveTab(authenticatedUser.permissions[0] || 'reports');
+    setActiveTab(firstVisiblePermission(authenticatedUser.permissions));
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Session is cleared locally even if the server is unavailable.
+    }
     localStorage.removeItem('amrita_access_token');
     setUser(null);
   };
@@ -76,7 +85,7 @@ function App() {
 
   if (!user) return <LoginPage onLogin={handleLogin} />;
 
-  const visibleItems = NAV_ITEMS.filter(item => user.permissions.includes(item.permission));
+  const visibleItems = NAV_ITEMS.filter(item => !item.hidden && user.permissions.includes(item.permission));
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">

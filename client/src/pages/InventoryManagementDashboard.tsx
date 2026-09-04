@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { InventoryItem, InventoryStatus, ESignaturePayload } from '../types/inventory';
 import { ESignatureModal } from '../components/ESignatureModal';
 import { GoodsInwardModal } from '../components/GoodsInwardModal';
+import { QCEvidenceModal } from '../components/QCEvidenceModal';
 import { api } from '../services/api';
 
 export const InventoryManagementDashboard: React.FC = () => {
@@ -13,6 +14,7 @@ export const InventoryManagementDashboard: React.FC = () => {
   // Modals
   const [isInwardOpen, setIsInwardOpen] = useState(false);
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
+  const [evidenceLot, setEvidenceLot] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<{
     lotNumber: string;
     targetStatus: InventoryStatus;
@@ -37,6 +39,10 @@ export const InventoryManagementDashboard: React.FC = () => {
         uom: d.uom,
         storageLocation: d.storage_location,
         status: d.status,
+        qcStatus: d.qc_status || (d.status === 'Approved' ? 'Pass' : d.status === 'Rejected' ? 'Fail' : 'Quarantine'),
+        qcTestedBy: d.qc_tested_by,
+        qcTestedAt: d.qc_tested_at,
+        qcReportCount: d.qc_report_count || 0,
         expiryDate: d.expiry_date,
         receivedDate: d.received_date ? d.received_date.split('T')[0] : '',
         releasedBy: d.released_by,
@@ -72,7 +78,7 @@ export const InventoryManagementDashboard: React.FC = () => {
     setPendingAction({
       lotNumber,
       targetStatus: newStatus,
-      meaning: newStatus === 'Approved' ? 'QC Approval' : 'QC Rejection',
+      meaning: newStatus === 'Approved' ? 'QC Approval' : newStatus === 'Rejected' ? 'QC Rejection' : 'QC Quarantine',
     });
     setIsSignModalOpen(true);
   };
@@ -202,7 +208,7 @@ export const InventoryManagementDashboard: React.FC = () => {
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              {status}
+              {status === 'Approved' ? 'QC Pass' : status === 'Rejected' ? 'QC Fail' : status}
             </button>
           ))}
         </div>
@@ -224,7 +230,7 @@ export const InventoryManagementDashboard: React.FC = () => {
                   <th className="px-4 py-3">Stock Qty</th>
                   <th className="px-4 py-3">Bin Location</th>
                   <th className="px-4 py-3">Expiry Date</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">QC Status</th>
                   <th className="px-4 py-3 text-right">QC Actions</th>
                 </tr>
               </thead>
@@ -269,30 +275,32 @@ export const InventoryManagementDashboard: React.FC = () => {
                               : 'bg-rose-100 text-rose-800'
                           }`}
                         >
-                          ● {item.status}
+                          ● {item.qcStatus || item.status}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        {item.status === 'Quarantine' ? (
-                          <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-1.5 flex-wrap">
+                          {item.status !== 'Approved' && (
                             <button
                               onClick={() => triggerStatusChange(item.lotNumber, 'Approved')}
                               className="px-2.5 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded shadow-sm"
                             >
-                              QC Release
+                              QC Pass
                             </button>
+                          )}
+                          {item.status !== 'Rejected' && (
                             <button
                               onClick={() => triggerStatusChange(item.lotNumber, 'Rejected')}
                               className="px-2.5 py-1 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded shadow-sm"
                             >
-                              Reject
+                              QC Fail
                             </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">
-                            Released ({item.releaseDate || 'Verified'})
-                          </span>
-                        )}
+                          )}
+                          {item.status !== 'Quarantine' && (
+                            <button onClick={() => triggerStatusChange(item.lotNumber, 'Quarantine')} className="px-2.5 py-1 text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 rounded">Quarantine</button>
+                          )}
+                          <button onClick={() => setEvidenceLot(item.lotNumber)} className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded">Evidence ({item.qcReportCount || 0})</button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -317,6 +325,8 @@ export const InventoryManagementDashboard: React.FC = () => {
         title="21 CFR Part 11 Electronic Signature"
         actionMeaning={pendingAction?.meaning || 'QC Approval'}
       />
+
+      <QCEvidenceModal lotNumber={evidenceLot} onClose={() => setEvidenceLot(null)} onChanged={loadInventory} />
     </div>
   );
 };

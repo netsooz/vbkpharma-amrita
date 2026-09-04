@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Text, ForeignKey, JSON
+from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Text, ForeignKey, JSON, LargeBinary
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -111,11 +111,35 @@ class InventoryLot(Base):
     uom = Column(String(20), default="kg")
     storage_location = Column(String(100), nullable=False)
     status = Column(String(50), default="Quarantine")
+    qc_status = Column(String(50), default="Quarantine")
+    qc_tested_by = Column(String(150), nullable=True)
+    qc_tested_at = Column(DateTime, nullable=True)
     expiry_date = Column(String(50), nullable=False)
     received_date = Column(DateTime, default=datetime.utcnow)
     released_by = Column(String(150), nullable=True)
     release_date = Column(String(50), nullable=True)
     barcode = Column(String(100), nullable=True)
+
+    qc_reports = relationship("QCTestReport", back_populates="inventory_lot", cascade="all, delete-orphan")
+
+
+class QCTestReport(Base):
+    __tablename__ = "qc_test_reports"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    inventory_lot_id = Column(String, ForeignKey("inventory_lots.id"), nullable=False)
+    lot_number = Column(String(50), index=True, nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    content_type = Column(String(100), nullable=False)
+    file_size = Column(Integer, nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    file_content = Column(LargeBinary, nullable=False)
+    test_result = Column(String(50), default="Pending Review")
+    notes = Column(Text, nullable=True)
+    uploaded_by = Column(String(150), nullable=False)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    inventory_lot = relationship("InventoryLot", back_populates="qc_reports")
 
 
 class Formulation(Base):
